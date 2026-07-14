@@ -1,0 +1,4 @@
+# Template-oracle declaration (tools.repository spec 007 ADR 001): this template
+# is the layout oracle for the "cli" primary class — its presence activates that
+# class's layout verification fleet-wide.
+class: cli
