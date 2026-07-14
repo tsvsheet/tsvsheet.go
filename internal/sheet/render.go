@@ -7,18 +7,18 @@ import (
 	"github.com/uplang/tsvsheet.go/internal/tsvt"
 )
 
-// renderExpr reconstructs a readable source form of an expression, used by
+// RenderExpr reconstructs a readable source form of an expression, used by
 // diagnostics and the explain trace.
-func renderExpr(expr tsvt.Expr) string {
+func RenderExpr(expr tsvt.Expr) string {
 	switch e := expr.(type) {
 	case tsvt.Number:
 		return e.Text
 	case tsvt.RefOperand:
-		return renderRef(e.Ref)
+		return RenderReference(e.Ref)
 	case tsvt.Unary:
-		return string(e.Op) + renderExpr(e.X)
+		return string(e.Op) + RenderExpr(e.X)
 	case tsvt.Binary:
-		return renderExpr(e.Left) + " " + string(e.Op) + " " + renderExpr(e.Right)
+		return RenderExpr(e.Left) + " " + string(e.Op) + " " + RenderExpr(e.Right)
 	default: // tsvt.Call
 		return renderCall(expr.(tsvt.Call))
 	}
@@ -28,13 +28,13 @@ func renderExpr(expr tsvt.Expr) string {
 func renderCall(call tsvt.Call) string {
 	args := make([]string, len(call.Args))
 	for i, arg := range call.Args {
-		args[i] = renderExpr(arg)
+		args[i] = RenderExpr(arg)
 	}
 	return call.Name + "(" + strings.Join(args, ",") + ")"
 }
 
-// renderRef reconstructs a reference.
-func renderRef(ref tsvt.Reference) string {
+// RenderReference reconstructs a reference.
+func RenderReference(ref tsvt.Reference) string {
 	switch r := ref.(type) {
 	case tsvt.RangeRef:
 		return renderRange(r)

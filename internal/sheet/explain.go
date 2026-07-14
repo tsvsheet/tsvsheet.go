@@ -49,7 +49,7 @@ func newTrace(t tsvt.Template, g, out Grid, at Address, raw string) Trace {
 	if !found {
 		return trace
 	}
-	trace.Formula = renderExpr(expr)
+	trace.Formula = RenderExpr(expr)
 	trace.Inputs = comp.traceInputs(expr, evalRow)
 	return trace
 }
@@ -188,7 +188,7 @@ func (c *computation) traceInputs(expr tsvt.Expr, evalRow int) []TraceInput {
 	res := c.resolverAt(evalRow)
 	var inputs []TraceInput
 	walkRefs(expr, func(ref tsvt.Reference) {
-		inputs = append(inputs, TraceInput{Ref: renderRef(ref), Value: res.resolveOperand(ref).scalar().String()})
+		inputs = append(inputs, TraceInput{Ref: RenderReference(ref), Value: res.resolveOperand(ref).scalar().String()})
 	})
 	return inputs
 }

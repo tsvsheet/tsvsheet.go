@@ -9,7 +9,7 @@ import errs "github.com/gomatic/go-error"
 
 // Keep these constants sorted alphabetically.
 const (
-	ErrGitCommand      errs.Const = "git command failed"
+	ErrDiagnostics     errs.Const = "template has diagnostics"
 	ErrInvalidName     errs.Const = "invalid name"
 	ErrInvalidValue    errs.Const = "invalid value"
 	ErrMissingArgument errs.Const = "missing required argument"
