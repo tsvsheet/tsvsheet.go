@@ -1,0 +1,5 @@
+=header(1)
+Numerator	Denominator	Quotient	Doubled
+=body
+C=A / B
+D=2 * A

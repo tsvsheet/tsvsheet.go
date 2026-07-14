@@ -1,0 +1,7 @@
+=header(1)
+Item	Qty	Price	Amount
+=body
+D=B * C
+=final
+A$+1=Total
+D$=sum(D$1:D$4)

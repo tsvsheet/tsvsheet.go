@@ -1,0 +1,5 @@
+=header(1)
+Student	Math	Reading	Science	Average	Result
+=body
+E=round(avg(B:D), 1)
+F=if(E >= 70, "Pass", "Fail")

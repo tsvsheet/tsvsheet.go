@@ -1,0 +1,9 @@
+=header(1)
+Day	High	Low	Range	VsYesterday
+=body
+D=B - C
+E=B - B1
+=final
+A$+1=Average
+B$=round(avg(B$1:B$5), 1)
+C$=round(avg(C$1:C$5), 1)
