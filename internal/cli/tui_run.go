@@ -33,7 +33,8 @@ func runTUI(streams Streams, cfg tuiConfig) error {
 // tui, both of which require file sources so edits can be saved.
 func loadEditable(template, data sourcePath) (*session.Session, func() error, error) {
 	if template.isStdin() || data.isStdin() {
-		return nil, nil, constants.ErrInvalidValue.With(nil, "message", "requires file paths for --template and --data")
+		const msg = "requires a template and a data file path (e.g. `tsvsheet serve sheet.tsvt sheet.tsv`)"
+		return nil, nil, constants.ErrInvalidValue.With(nil, "message", msg)
 	}
 	sess, err := loadSession(template, data)
 	if err != nil {

@@ -49,11 +49,11 @@ func TestCommand_HasAllCommands(t *testing.T) {
 }
 
 func TestCLI_Render(t *testing.T) {
-	dataPath := filepath.Join(t.TempDir(), "d.tsv")
-	require.NoError(t, os.WriteFile(dataPath, []byte(sampleData), 0o600))
-	withStdin(t, sampleTemplate)
+	tmplPath := filepath.Join(t.TempDir(), "t.tsvt")
+	require.NoError(t, os.WriteFile(tmplPath, []byte(sampleTemplate), 0o600))
+	withStdin(t, sampleData) // data piped on stdin
 
-	out, err := runCLI(t, "render", "--data", dataPath)
+	out, err := runCLI(t, "render", tmplPath) // template positional, data from stdin
 	require.NoError(t, err)
 	assert.Contains(t, out, "\t7\n")
 }
@@ -79,9 +79,20 @@ func TestCLI_ExplainCell(t *testing.T) {
 	tmplPath := filepath.Join(t.TempDir(), "t.tsvt")
 	require.NoError(t, os.WriteFile(tmplPath, []byte("=body\nE=C + D\n"), 0o600))
 
-	out, err := runCLI(t, "explain", "--cell", "E2", "--template", tmplPath, "--data", dataPath)
+	out, err := runCLI(t, "explain", "E2", tmplPath, dataPath)
 	require.NoError(t, err)
 	assert.Contains(t, out, "E2 = 9")
+}
+
+func TestPositional(t *testing.T) {
+	t.Parallel()
+
+	args := positional{"first", "second"}
+	assert.Equal(t, sourcePath("first"), args.at(0))
+	assert.Equal(t, sourcePath("second"), args.at(1))
+	assert.Equal(t, sourcePath(""), args.at(2)) // missing → stdin
+	assert.Equal(t, "first", args.text(0))
+	assert.Equal(t, "", args.text(5)) // missing → empty
 }
 
 func TestExitCode(t *testing.T) {
@@ -128,7 +139,7 @@ func TestRunParse_ReadError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runParse(streams, parseConfig{template: "-"})
+	err := runParse(streams, "-")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrReadInput)
 }
@@ -140,7 +151,7 @@ func TestRunRender_DataReadError(t *testing.T) {
 	require.NoError(t, os.WriteFile(tmplPath, []byte(sampleTemplate), 0o600))
 
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runRender(streams, renderConfig{template: sourcePath(tmplPath), data: "-"})
+	err := runRender(streams, sourcePath(tmplPath), "-")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrReadInput)
 }

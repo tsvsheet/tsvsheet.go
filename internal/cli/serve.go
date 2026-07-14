@@ -17,23 +17,19 @@ type serveConfig struct {
 // serveCommand builds the `serve` command.
 func serveCommand() *cli.Command {
 	cfg := serveConfig{}
-	tmpl := buildTemplateFlag()
-	tmpl.Destination = (*string)(&cfg.template)
-	data := buildDataFlag()
-	data.Destination = (*string)(&cfg.data)
 	return &cli.Command{
 		Name:      cmdServe,
 		Usage:     "Serve a browser spreadsheet editor for a worksheet.",
-		ArgsUsage: " ",
+		ArgsUsage: "<template> <data>",
 		Description: `Host a local web spreadsheet backed by the tsvsheet engine: edit data cells
-and the template in the browser, recompute live, and save both files.
+and the template in the browser, recompute live, and save both files. The
+template and data are required positional file paths (serve saves edits back
+to them, so stdin is not accepted).
 
 Examples:
-  tsvsheet serve --template sheet.tsvt --data sheet.tsv
-  tsvsheet serve --host 0.0.0.0 --port 8080 -t sheet.tsvt -d sheet.tsv`,
+  tsvsheet serve sheet.tsvt sheet.tsv
+  tsvsheet serve --host 0.0.0.0 --port 8080 sheet.tsvt sheet.tsv`,
 		Flags: []cli.Flag{
-			tmpl,
-			data,
 			&cli.StringFlag{
 				Name:        "host",
 				Sources:     cli.EnvVars("HOST"),
@@ -50,6 +46,11 @@ Examples:
 				Destination: &cfg.port,
 			},
 		},
-		Action: func(ctx context.Context, _ *cli.Command) error { return runServe(ctx, cfg) },
+		Action: func(ctx context.Context, c *cli.Command) error {
+			args := positional(c.Args().Slice())
+			cfg.template = args.at(0)
+			cfg.data = args.at(1)
+			return runServe(ctx, cfg)
+		},
 	}
 }

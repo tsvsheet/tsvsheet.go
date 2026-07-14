@@ -7,11 +7,6 @@ import (
 	"github.com/uplang/tsvsheet.go/internal/tsvt"
 )
 
-// parseConfig binds the parse command's template source path.
-type parseConfig struct {
-	template sourcePath
-}
-
 // lineView is the JSON projection of one parsed template line: its kind and its
 // normalized source form (cells for a row).
 type lineView struct {
@@ -28,8 +23,8 @@ type worksheetView struct {
 
 // runParse parses a template and writes its structure as JSON to the output
 // stream — a stable, jq-friendly surface for scripting.
-func runParse(streams Streams, cfg parseConfig) error {
-	reader, release, err := cfg.template.open(streams.In)
+func runParse(streams Streams, template sourcePath) error {
+	reader, release, err := template.open(streams.In)
 	if err != nil {
 		return err
 	}
@@ -87,20 +82,18 @@ func lineNumberOf(line tsvt.Line) tsvt.LineNumber {
 
 // parseCommand builds the `parse` command.
 func parseCommand() *cli.Command {
-	cfg := parseConfig{}
-	tmpl := buildTemplateFlag()
-	tmpl.Destination = (*string)(&cfg.template)
 	return &cli.Command{
 		Name:      cmdParse,
 		Usage:     "Parse a template and emit its structure as JSON.",
-		ArgsUsage: " ",
-		Description: `Parse a .tsvt template and write its line structure as JSON to stdout — a
-stable surface for scripting and tooling.
+		ArgsUsage: "[template]",
+		Description: `Parse a .tsvt template (positional; omitted or "-" reads stdin) and write its
+line structure as JSON to stdout — a stable surface for scripting and tooling.
 
 Examples:
-  tsvsheet parse --template sheet.tsvt | jq '.lines[].kind'
+  tsvsheet parse sheet.tsvt | jq '.lines[].kind'
   cat sheet.tsvt | tsvsheet parse`,
-		Flags:  []cli.Flag{tmpl},
-		Action: streamAction(func(s Streams) error { return runParse(s, cfg) }),
+		Action: streamAction(func(s Streams, args positional) error {
+			return runParse(s, args.at(0))
+		}),
 	}
 }

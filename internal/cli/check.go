@@ -11,16 +11,11 @@ import (
 	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
-// checkConfig binds the check command's template source path.
-type checkConfig struct {
-	template sourcePath
-}
-
 // runCheck validates a template, writing one diagnostic per line to the error
 // stream. It returns ErrSyntax on a parse failure (exit 2), ErrDiagnostics when
 // the template parses but has findings (exit 1), or nil when clean (exit 0).
-func runCheck(streams Streams, cfg checkConfig) error {
-	reader, release, err := cfg.template.open(streams.In)
+func runCheck(streams Streams, template sourcePath) error {
+	reader, release, err := template.open(streams.In)
 	if err != nil {
 		return err
 	}
@@ -54,20 +49,19 @@ func isDiagnostics(err error) bool { return errors.Is(err, constants.ErrDiagnost
 
 // checkCommand builds the `check` command.
 func checkCommand() *cli.Command {
-	cfg := checkConfig{}
-	tmpl := buildTemplateFlag()
-	tmpl.Destination = (*string)(&cfg.template)
 	return &cli.Command{
 		Name:      cmdCheck,
 		Usage:     "Validate a template and report diagnostics.",
-		ArgsUsage: " ",
-		Description: `Parse and statically check a .tsvt template. Diagnostics are written one per
-line to stderr. Exit status: 0 clean, 1 diagnostics found, 2 syntax error.
+		ArgsUsage: "[template]",
+		Description: `Parse and statically check a .tsvt template (positional; omitted or "-" reads
+stdin). Diagnostics are written one per line to stderr. Exit status: 0 clean,
+1 diagnostics found, 2 syntax error.
 
 Examples:
-  tsvsheet check --template sheet.tsvt
+  tsvsheet check sheet.tsvt
   cat sheet.tsvt | tsvsheet check`,
-		Flags:  []cli.Flag{tmpl},
-		Action: streamAction(func(s Streams) error { return runCheck(s, cfg) }),
+		Action: streamAction(func(s Streams, args positional) error {
+			return runCheck(s, args.at(0))
+		}),
 	}
 }

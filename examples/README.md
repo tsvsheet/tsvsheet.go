@@ -3,14 +3,14 @@
 Each example is a two-file worksheet — a `.tsv` value grid and its `.tsvt` template — ready to open in the browser spreadsheet. Serve one and edit it live (data-cell edits recompute the formulas through the same engine):
 
 ```sh
-tsvsheet serve --template examples/grades.tsvt --data examples/grades.tsv
+tsvsheet serve examples/grades.tsvt examples/grades.tsv
 # then open http://127.0.0.1:8080
 ```
 
 Every example also renders straight to stdout — handy for a terminal demo or piping into other tools:
 
 ```sh
-tsvsheet render --template examples/invoice.tsvt --data examples/invoice.tsv | column -t
+tsvsheet render examples/invoice.tsvt examples/invoice.tsv | column -t
 ```
 
 | Worksheet | Demonstrates |

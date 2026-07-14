@@ -15,17 +15,20 @@ const (
 against a .tsv value grid and emits the computed sheet — a two-file worksheet
 kept diffable as text.
 
-Commands:
-  render    Compute a worksheet and write TSV to stdout
-  parse     Emit a template's structure as JSON
-  check     Validate a template (exit 0 clean / 1 diagnostics / 2 syntax)
-  explain   Trace how one computed cell was produced
-  serve     Serve a browser spreadsheet editor for a worksheet
-  tui       Edit a worksheet in a terminal UI
+Inputs are positional: template first, then data. An omitted input is read
+from stdin.
 
-Every non-interactive command reads from stdin and writes to stdout, so it
-composes in unix pipelines:
-  cat sheet.tsvt | tsvsheet render --data sheet.tsv | column -t`
+Commands:
+  render  <template> <data>          Compute a worksheet, write TSV to stdout
+  parse   <template>                 Emit a template's structure as JSON
+  check   <template>                 Validate (exit 0 clean / 1 diags / 2 syntax)
+  explain <cell> <template> <data>   Trace how one computed cell was produced
+  serve   <template> <data>          Browser spreadsheet editor for a worksheet
+  tui     <template> <data>          Terminal spreadsheet editor
+
+Non-interactive commands write to stdout, so they compose in unix pipelines:
+  tsvsheet render sheet.tsvt sheet.tsv | column -t
+  cat sheet.tsvt | tsvsheet check`
 )
 
 // exit codes.

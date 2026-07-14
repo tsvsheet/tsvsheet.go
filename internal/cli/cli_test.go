@@ -43,7 +43,7 @@ func TestRunRender_TemplateStdinDataFile(t *testing.T) {
 
 	dataPath := writeTemp(t, "d.tsv", sampleData)
 	streams, out, _ := streamsWith(sampleTemplate)
-	err := runRender(streams, renderConfig{template: "-", data: sourcePath(dataPath)})
+	err := runRender(streams, "-", sourcePath(dataPath))
 	require.NoError(t, err)
 	assert.Equal(t, "1\t2\t3\t4\t7\n2\t3\t4\t5\t9\n3\t4\t5\t6\t11\n", out.String())
 }
@@ -52,7 +52,7 @@ func TestRunRender_BothStdin(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("")
-	err := runRender(streams, renderConfig{})
+	err := runRender(streams, "", "")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidValue)
 }
@@ -61,7 +61,7 @@ func TestRunRender_TemplateFileMissing(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith(sampleData)
-	err := runRender(streams, renderConfig{template: "/no/such.tsvt", data: "-"})
+	err := runRender(streams, "/no/such.tsvt", "-")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }
@@ -70,7 +70,7 @@ func TestRunRender_DataFileMissing(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith(sampleTemplate)
-	err := runRender(streams, renderConfig{template: "-", data: "/no/such.tsv"})
+	err := runRender(streams, "-", "/no/such.tsv")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }
@@ -80,7 +80,7 @@ func TestRunRender_SyntaxError(t *testing.T) {
 
 	dataPath := writeTemp(t, "d.tsv", sampleData)
 	streams, _, _ := streamsWith("=sum(")
-	err := runRender(streams, renderConfig{template: "-", data: sourcePath(dataPath)})
+	err := runRender(streams, "-", sourcePath(dataPath))
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrSyntax)
 }
@@ -90,7 +90,7 @@ func TestRunRender_ComputeRejected(t *testing.T) {
 
 	dataPath := writeTemp(t, "d.tsv", sampleData)
 	streams, _, _ := streamsWith("=final\n=A:C<") // range-scoped structural
-	err := runRender(streams, renderConfig{template: "-", data: sourcePath(dataPath)})
+	err := runRender(streams, "-", sourcePath(dataPath))
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrUnsupported)
 }
@@ -100,7 +100,7 @@ func TestRunRender_WriteError(t *testing.T) {
 
 	dataPath := writeTemp(t, "d.tsv", sampleData)
 	streams := Streams{In: strings.NewReader(sampleTemplate), Out: failWriter{}, Err: &bytes.Buffer{}}
-	err := runRender(streams, renderConfig{template: "-", data: sourcePath(dataPath)})
+	err := runRender(streams, "-", sourcePath(dataPath))
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrWriteFile)
 }
@@ -110,7 +110,7 @@ func TestRunRender_TemplateFileReads(t *testing.T) {
 
 	tmplPath := writeTemp(t, "t.tsvt", sampleTemplate)
 	streams, out, _ := streamsWith(sampleData)
-	err := runRender(streams, renderConfig{template: sourcePath(tmplPath), data: "-"})
+	err := runRender(streams, sourcePath(tmplPath), "-")
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "\t7\n")
 }
@@ -119,7 +119,7 @@ func TestRunCheck_Clean(t *testing.T) {
 	t.Parallel()
 
 	streams, _, errBuf := streamsWith("=body\nE=C + D\n")
-	require.NoError(t, runCheck(streams, checkConfig{template: "-"}))
+	require.NoError(t, runCheck(streams, "-"))
 	assert.Empty(t, errBuf.String())
 }
 
@@ -127,7 +127,7 @@ func TestRunCheck_Diagnostics(t *testing.T) {
 	t.Parallel()
 
 	streams, _, errBuf := streamsWith("=body\nC!\n")
-	err := runCheck(streams, checkConfig{template: "-"})
+	err := runCheck(streams, "-")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrDiagnostics)
 	assert.Contains(t, errBuf.String(), "line 2")
@@ -137,7 +137,7 @@ func TestRunCheck_SyntaxError(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("=sum(")
-	err := runCheck(streams, checkConfig{template: "-"})
+	err := runCheck(streams, "-")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrSyntax)
 }
@@ -146,7 +146,7 @@ func TestRunCheck_FileMissing(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("")
-	err := runCheck(streams, checkConfig{template: "/no/such.tsvt"})
+	err := runCheck(streams, "/no/such.tsvt")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }
@@ -234,7 +234,7 @@ func TestRunParse_JSON(t *testing.T) {
 	t.Parallel()
 
 	streams, out, _ := streamsWith("=header(1)\nA\tB\n=body\nE=C + D\n")
-	require.NoError(t, runParse(streams, parseConfig{template: "-"}))
+	require.NoError(t, runParse(streams, "-"))
 	assert.Contains(t, out.String(), `"kind": "header"`)
 	assert.Contains(t, out.String(), `"kind": "row"`)
 	assert.Contains(t, out.String(), `"kind": "body"`)
@@ -245,7 +245,7 @@ func TestRunParse_Structural(t *testing.T) {
 	t.Parallel()
 
 	streams, out, _ := streamsWith("=final\n=A<\n")
-	require.NoError(t, runParse(streams, parseConfig{template: "-"}))
+	require.NoError(t, runParse(streams, "-"))
 	assert.Contains(t, out.String(), `"kind": "structural"`)
 	assert.Contains(t, out.String(), `"kind": "final"`)
 }
@@ -254,7 +254,7 @@ func TestRunParse_SyntaxError(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("=sum(")
-	err := runParse(streams, parseConfig{template: "-"})
+	err := runParse(streams, "-")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrSyntax)
 }
@@ -263,7 +263,7 @@ func TestRunParse_FileMissing(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("")
-	err := runParse(streams, parseConfig{template: "/no/such.tsvt"})
+	err := runParse(streams, "/no/such.tsvt")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }

@@ -112,36 +112,29 @@ func writeJSON(w io.Writer, v any) error {
 // explainCommand builds the `explain` command.
 func explainCommand() *cli.Command {
 	cfg := explainConfig{}
-	tmpl := buildTemplateFlag()
-	tmpl.Destination = (*string)(&cfg.template)
-	data := buildDataFlag()
-	data.Destination = (*string)(&cfg.data)
 	return &cli.Command{
 		Name:      cmdExplain,
 		Usage:     "Trace how one computed cell was produced.",
-		ArgsUsage: " ",
+		ArgsUsage: "<cell> [template] [data]",
 		Description: `Explain a single output cell: its value, the formula that produced it, and
-the resolved value of each reference the formula reads.
+the resolved value of each reference the formula reads. The cell is required
+and positional; the template and data follow (omitted or "-" reads stdin).
 
 Examples:
-  tsvsheet explain --cell F4 --template sheet.tsvt --data sheet.tsv
-  tsvsheet explain --cell F4 --json --template sheet.tsvt --data sheet.tsv`,
+  tsvsheet explain F4 sheet.tsvt sheet.tsv
+  tsvsheet explain F4 --json sheet.tsvt sheet.tsv`,
 		Flags: []cli.Flag{
-			tmpl,
-			data,
-			&cli.StringFlag{
-				Name:        cellFlag,
-				Aliases:     []string{"c"},
-				Usage:       "Target cell in spreadsheet notation (e.g. F4)",
-				Required:    true,
-				Destination: &cfg.cell,
-			},
 			&cli.BoolFlag{
 				Name:        jsonFlag,
 				Usage:       "Emit the trace as JSON",
 				Destination: &cfg.isJSON,
 			},
 		},
-		Action: streamAction(func(s Streams) error { return runExplain(s, cfg) }),
+		Action: streamAction(func(s Streams, args positional) error {
+			cfg.cell = args.text(0)
+			cfg.template = args.at(1)
+			cfg.data = args.at(2)
+			return runExplain(s, cfg)
+		}),
 	}
 }

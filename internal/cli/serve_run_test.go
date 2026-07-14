@@ -162,6 +162,6 @@ func TestServeCommand_Integration(t *testing.T) {
 	cancel()
 
 	cmd := serveCommand()
-	err := cmd.Run(ctx, []string{cmdServe, "--template", string(tmpl), "--data", string(data), "--port", "0"})
+	err := cmd.Run(ctx, []string{cmdServe, string(tmpl), string(data), "--port", "0"})
 	require.NoError(t, err)
 }

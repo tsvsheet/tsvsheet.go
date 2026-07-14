@@ -14,39 +14,37 @@ var stdin io.Reader = os.Stdin
 // stderr is indirected so tests can capture diagnostics.
 var stderr io.Writer = os.Stderr
 
-const (
-	templateFlag = "template"
-	dataFlag     = "data"
-	jsonFlag     = "json"
-	cellFlag     = "cell"
-)
+// jsonFlag names the explain command's --json option.
+const jsonFlag = "json"
 
-// buildTemplateFlag builds the --template path flag with its destination unset;
-// each command wires the destination to its own config field, so no pointer is
-// passed across a call boundary.
-func buildTemplateFlag() *cli.StringFlag {
-	return &cli.StringFlag{
-		Name:    templateFlag,
-		Aliases: []string{"t"},
-		Sources: cli.EnvVars("TSVSHEET_TEMPLATE"),
-		Usage:   "Template .tsvt path ('-' or omitted = stdin)",
+// positional is a command's positional arguments. Required inputs (template,
+// data, cell) are positional — never flags — so invocations read as
+// `tsvsheet serve sheet.tsvt sheet.tsv`.
+type positional []string
+
+// at returns the i-th positional argument as a source path, or "" (meaning
+// stdin) when the argument is absent.
+func (p positional) at(i int) sourcePath {
+	if i < len(p) {
+		return sourcePath(p[i])
 	}
+	return ""
 }
 
-// buildDataFlag builds the --data path flag with its destination unset.
-func buildDataFlag() *cli.StringFlag {
-	return &cli.StringFlag{
-		Name:    dataFlag,
-		Aliases: []string{"d"},
-		Sources: cli.EnvVars("TSVSHEET_DATA"),
-		Usage:   "Data .tsv path ('-' or omitted = stdin)",
+// text returns the i-th positional argument verbatim, or "" when absent.
+func (p positional) text(i int) string {
+	if i < len(p) {
+		return p[i]
 	}
+	return ""
 }
 
-// streamAction adapts a stream-injected function to a cli Action, wiring stdout
-// from the command writer and stderr from the indirected stream.
-func streamAction(fn func(Streams) error) cli.ActionFunc {
+// streamAction adapts a positional-args + stream-injected function to a cli
+// Action, wiring stdout from the command writer and stderr from the indirected
+// stream, and the positional arguments from the parsed command line.
+func streamAction(fn func(Streams, positional) error) cli.ActionFunc {
 	return func(_ context.Context, c *cli.Command) error {
-		return fn(Streams{In: stdin, Out: c.Root().Writer, Err: stderr})
+		streams := Streams{In: stdin, Out: c.Root().Writer, Err: stderr}
+		return fn(streams, positional(c.Args().Slice()))
 	}
 }

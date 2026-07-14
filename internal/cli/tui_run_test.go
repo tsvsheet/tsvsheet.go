@@ -59,7 +59,7 @@ func TestTUICommand_Integration(t *testing.T) {
 
 	tmpl, data := worksheetFiles(t)
 	cmd := tuiCommand()
-	err := cmd.Run(context.Background(), []string{cmdTUI, "--template", string(tmpl), "--data", string(data)})
+	err := cmd.Run(context.Background(), []string{cmdTUI, string(tmpl), string(data)})
 	require.NoError(t, err)
 }
 
