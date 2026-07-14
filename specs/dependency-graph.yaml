@@ -20,12 +20,14 @@ capabilities:
     contracts: [engine-api]
     status: planned
 
+# serve and tui mount as subcommands of the one cmd/tsvsheet binary, so they
+# depend on cli for the urfave/cli command shell as well as on session.
   serve:
-    depends_on: [session]
+    depends_on: [session, cli]
     contracts: [engine-api]
     status: planned
 
   tui:
-    depends_on: [session]
+    depends_on: [session, cli]
     contracts: [engine-api]
     status: planned

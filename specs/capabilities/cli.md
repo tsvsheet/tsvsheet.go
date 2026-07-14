@@ -15,6 +15,6 @@ Expose the engine as a strict unix-philosophy CLI: text streams in, text streams
 
 ## Acceptance Criteria
 
-- Piping the grammar repo's `testdata/sheet-worked-example.tsvt` with its data through `render` produces the golden output; the same invocation shapes are covered by tests using injected stdin/stdout.
+- Piping the worked-example template with its data (`testdata/sheet-worked-example.tsvt` + `testdata/sheet-worked-example.tsv`, both committed in this repo — the grammar repo carries no `.tsv`) through `render` produces the **ADR 0003-derived** golden output (SPEC §8's shown output is documented as internally inconsistent and is not a target); the same invocation shapes are covered by tests using injected stdin/stdout.
 - Exit codes asserted for: success, diagnostics, syntax error, missing input.
 - 100% coverage on command and domain tiers.

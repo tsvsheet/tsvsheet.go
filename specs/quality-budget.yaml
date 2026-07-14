@@ -7,8 +7,12 @@ max_dependencies_per_package: 8
 minimum_test_coverage: 100           # fleet gate: aggregate statement coverage exactly 100.0% (src/grammar excluded)
 required_error_handling: exhaustive  # errs.Const sentinels only; every failure path asserted with errors.Is
 required_observability: structured_logs
+receivers: value-only                # no pointer receivers except internal/session (justified in contracts/engine-api.md)
 
-# Scoring weights (sum to 100).
+# Scoring weights (sum to 100). Deliberate deviation from the standard model
+# (correctness 35 / reliability 10 vs 30 / 15): this is a language processor —
+# semantic correctness dominates; there is no long-running availability story
+# beyond the local serve process.
 weights:
   correctness: 35
   testability: 20
