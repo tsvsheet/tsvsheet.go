@@ -156,9 +156,3 @@ func TestRunExplain_DataReadError(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrReadInput)
 }
-
-func TestTUIStub_NotImplemented(t *testing.T) {
-	t.Parallel()
-
-	assert.ErrorIs(t, runTUI(Streams{}, tuiConfig{}), constants.ErrUnsupported)
-}

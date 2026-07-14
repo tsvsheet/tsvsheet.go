@@ -37,14 +37,11 @@ func runServe(ctx context.Context, cfg serveConfig) error {
 // loadServer reads the worksheet files into a session and builds the HTTP
 // server with a saver that writes edits back to those files.
 func loadServer(template, data sourcePath) (*serve.Server, error) {
-	if template.isStdin() || data.isStdin() {
-		return nil, constants.ErrInvalidValue.With(nil, "message", "serve requires file paths for --template and --data")
-	}
-	sess, err := loadSession(template, data)
+	sess, persist, err := loadEditable(template, data)
 	if err != nil {
 		return nil, err
 	}
-	return serve.NewServer(sess, saver(sess, template, data)), nil
+	return serve.NewServer(sess, persist), nil
 }
 
 // loadSession reads both files and builds a session.
@@ -65,8 +62,9 @@ func loadSession(template, data sourcePath) (*session.Session, error) {
 }
 
 // saver builds the persist function: it writes the session's current template
-// and data back to their source files.
-func saver(sess *session.Session, template, data sourcePath) serve.Saver {
+// and data back to their source files. The plain func() error is assignable to
+// both serve.Saver and tui.Saver.
+func saver(sess *session.Session, template, data sourcePath) func() error {
 	return func() error {
 		if err := os.WriteFile(string(template), sess.TemplateText(), filePerm); err != nil {
 			return constants.ErrWriteFile.With(err, string(template))

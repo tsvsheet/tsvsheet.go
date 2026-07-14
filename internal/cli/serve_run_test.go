@@ -165,13 +165,3 @@ func TestServeCommand_Integration(t *testing.T) {
 	err := cmd.Run(ctx, []string{"serve", "--template", string(tmpl), "--data", string(data), "--port", "0"})
 	require.NoError(t, err)
 }
-
-func TestTUICommand_Integration(t *testing.T) {
-	t.Parallel()
-
-	// runTUI is a stub returning ErrUnsupported; it ignores the input stream.
-	cmd := tuiCommand()
-	err := cmd.Run(context.Background(), []string{"tui"})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrUnsupported)
-}
