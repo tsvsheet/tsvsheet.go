@@ -369,4 +369,11 @@ var functions = map[string]function{
 	"small":      {impl: fnSmall, minArgs: 2, maxArgs: -1},
 	"counta":     {impl: fnCount, minArgs: 1, maxArgs: -1},
 	"countblank": {impl: fnCountblank, minArgs: 1, maxArgs: -1},
+
+	// Phase 8 — financial (basic).
+	"pmt": {impl: fnPmt, minArgs: 3, maxArgs: 5},
+	"fv":  {impl: fnFv, minArgs: 3, maxArgs: 5},
+	"pv":  {impl: fnPv, minArgs: 3, maxArgs: 5},
+	"npv": {impl: fnNpv, minArgs: 2, maxArgs: -1},
+	"sln": {impl: fnSln, minArgs: 3, maxArgs: 3},
 }
