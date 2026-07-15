@@ -13,7 +13,7 @@ Every example also renders straight to stdout — handy for a terminal demo or p
 tsvsheet render examples/invoice.tsvt | column -t
 ```
 
-A sheet with a `#!/usr/bin/env tsvsheet` shebang is directly **executable** (running `tsvsheet <file>` with no subcommand renders it); full-line comments are a first-line `#!` or any `# ` (hash-space) line. And `parse` ⇄ `from-json` round-trips a sheet through a jq-friendly grid — `{"rows": [[…source…]]}`, plus a `"values"` computed grid with `--value`:
+A sheet with a `#!/usr/bin/env tsvsheet` shebang is directly **executable** (running `tsvsheet <file>` with no subcommand renders it); full-line comments are a first-line `#!` or any `#` (hash-space) line. And `parse` ⇄ `from-json` round-trips a sheet through a jq-friendly grid — `{"rows": [[…source…]]}`, plus a `"values"` computed grid with `--value`:
 
 ```sh
 ./examples/celsius.tsvt                                   # executable
@@ -30,7 +30,7 @@ tsvsheet parse examples/invoice.tsvt | tsvsheet from-json # exact round-trip
 | [weather](weather.tsvt) | Per-row differences (`Range = High − Low`, `=B2-C2`) and a `Peak` summary row reducing a column with `max`/`min` (`=max(B2:B6)`, `=min(C2:C6)`). |
 | [functions](functions.tsvt) | A reference sheet demonstrating every built-in function with a worked formula and computed result — math and trig, aggregate and statistics, text, logical and info, date and time, lookup, financial, and a dynamic-array showcase whose results spill down their columns. |
 | [order](order.tsvt) → [discount](discount.tsvt) | **Embedded sheets** — each `Line total` embeds the whole [discount](discount.tsvt) sheet as a function: `=sheet("discount.tsvt", C2, B2)` passes the unit price and quantity, and the cell's value is that sub-sheet's `=output(…)`. |
-| [celsius](celsius.tsvt) | **An executable sheet** — a `#!/usr/bin/env tsvsheet` shebang and a `# ` comment line, so `chmod +x celsius.tsvt && ./celsius.tsvt` computes and prints the table. Comment lines are skipped and don't occupy a row. |
+| [celsius](celsius.tsvt) | **An executable sheet** — a `#!/usr/bin/env tsvsheet` shebang and a `#` comment line, so `chmod +x celsius.tsvt && ./celsius.tsvt` computes and prints the table. Comment lines are skipped and don't occupy a row. |
 
 ## Embedded sheets — a spreadsheet as a function
 

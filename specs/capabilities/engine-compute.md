@@ -17,7 +17,7 @@ Compute an output grid from a `.tsv` value grid plus a parsed template, implemen
 
 ## Acceptance Criteria
 
-- Golden tests: a corpus of template+data pairs (including the §8 template) with committed expected TSV outputs derived from ADR 0003; the §8 discrepancies are asserted as *our* documented values.
+- Golden tests: a corpus of template+data pairs (including the §8 template) with committed expected TSV outputs derived from ADR 0003; the §8 discrepancies are asserted as _our_ documented values.
 - Every ADR 0003 rule has at least one test exercising it, including each error value and each rejection path.
 - 100% statement coverage on `internal/sheet`, failure paths asserted with `errors.Is`.
 

@@ -1,13 +1,13 @@
 # Quality budget — set BEFORE implementation. Planner, architect, implementer,
 # and reviewer all optimize against these constraints.
 tier: production
-max_cognitive_complexity: 7          # fleet gocognit gate
+max_cognitive_complexity: 7 # fleet gocognit gate
 max_function_length: 50
 max_dependencies_per_package: 8
-minimum_test_coverage: 100           # fleet gate: aggregate statement coverage exactly 100.0% (src/grammar excluded)
-required_error_handling: exhaustive  # errs.Const sentinels only; every failure path asserted with errors.Is
+minimum_test_coverage: 100 # fleet gate: aggregate statement coverage exactly 100.0% (src/grammar excluded)
+required_error_handling: exhaustive # errs.Const sentinels only; every failure path asserted with errors.Is
 required_observability: structured_logs
-receivers: value-only                # no pointer receivers except internal/session (justified in contracts/engine-api.md)
+receivers: value-only # no pointer receivers except internal/session (justified in contracts/engine-api.md)
 
 # Scoring weights (sum to 100). Deliberate deviation from the standard model
 # (correctness 35 / reliability 10 vs 30 / 15): this is a language processor —

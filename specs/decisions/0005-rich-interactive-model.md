@@ -10,7 +10,7 @@ The web and TUI frontends were a faithful but minimal projection of the engine: 
 
 1. **Reference visibility** — when a cell is selected, show which cells its formula reads (precedents) and which cells read it (dependents). Spreadsheets rarely make the dependency graph visible; doing so is a genuine usability win and pure engine information.
 2. **Structural edits** — insert and delete whole rows and columns, with A1 references in every formula rewritten to follow the move (shift on insert/delete; a reference to a deleted cell becomes `#REF!`), exactly like a conventional spreadsheet.
-3. **Embedded sub-sheets** — a cell whose value is the computed output of an *entire other sheet*: a spreadsheet used as a function. This is the headline feature and does not exist in conventional tools.
+3. **Embedded sub-sheets** — a cell whose value is the computed output of an _entire other sheet_: a spreadsheet used as a function. This is the headline feature and does not exist in conventional tools.
 
 The binding constraint is the project's **grammar-first** rule: the formula language is defined by the ANTLR grammar in `uplang/tsvsheet`, and anything the grammar can express must be expressed there, not bolted on as host-side wrapper logic.
 
@@ -34,7 +34,7 @@ Both are value methods returning value types; no grammar or spec change — this
 A sub-sheet is referenced by file path and used as a function. Three builtins, **all ordinary function calls the existing grammar already admits** (`functionCall : (NAME|COL) NUMBER? LPAREN argList? RPAREN`), so there is **no grammar change** — only new semantics in the engine and new prose in `SPECIFICATION.md`:
 
 - `OUTPUT(expr)` — marks the cell it occupies as the sheet's single output cell; its value is `expr` (identity). A sheet with an `OUTPUT` cell can be embedded. Two `OUTPUT` cells, or embedding a sheet with none, is `#REF!`.
-- `SHEET(path, args…)` — loads the `.tsvt` at `path`, computes it, and returns its `OUTPUT` cell's value. The embedding cell's value *is* the sub-sheet's output.
+- `SHEET(path, args…)` — loads the `.tsvt` at `path`, computes it, and returns its `OUTPUT` cell's value. The embedding cell's value _is_ the sub-sheet's output.
 - `INPUT(n)` — inside a sub-sheet, resolves to the nth argument passed by the embedding `SHEET(…)` call (1-based), making the sub-sheet a parameterized function. Out of range, or evaluated in a sheet that was not embedded, is `#REF!`.
 
 Safety and termination:

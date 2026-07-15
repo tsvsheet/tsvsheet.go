@@ -23,7 +23,7 @@ The evaluated `Value` ([internal/sheet/value.go](../../internal/sheet/value.go))
 
 `builtin func([]Value) Value` is replaced by a **descriptor** the evaluator drives:
 
-```
+```text
 name, aliases        case-insensitive identity
 minArgs, maxArgs     arity, checked centrally (variadic = maxArgs unbounded) → #VALUE! / #N/A per Excel
 category             Eager | Lazy | ErrorAware
@@ -34,7 +34,7 @@ impl                 the function body
 - **Lazy** (`IF`, `IFS`, `IFERROR`, `IFNA`, `AND`, `OR`, `SWITCH`, `CHOOSE`): the impl receives argument **thunks** and evaluates only what it needs — generalizing the existing special-cased `if` at [funcs.go:79](../../internal/sheet/funcs.go#L79).
 - **ErrorAware** (`IFERROR`, `IFNA`, `ISERROR`, `ISERR`, `ISNA`, `ERROR.TYPE`, `AGGREGATE`): receives arguments **including** error values without short-circuit, so it can inspect them.
 
-Functions needing the *reference itself*, not its value (`ROW`, `COLUMN`, `ROWS`, `COLUMNS`, `OFFSET`, `INDIRECT`, `ADDRESS`, `ISREF`, `CELL`), take a reference-shaped argument; the resolver exposes a cell/range reference to them without evaluating the target.
+Functions needing the _reference itself_, not its value (`ROW`, `COLUMN`, `ROWS`, `COLUMNS`, `OFFSET`, `INDIRECT`, `ADDRESS`, `ISREF`, `CELL`), take a reference-shaped argument; the resolver exposes a cell/range reference to them without evaluating the target.
 
 ### 3. Grammar — Excel-faithful operators (grammar repo)
 
@@ -48,7 +48,7 @@ Changes to `TsvsheetLexer.g4`/`TsvsheetParser.g4` in [uplang/tsvsheet](https://g
 
 ### 4. Spilling (dynamic arrays)
 
-A **top-level** formula that evaluates to `kindArray` spills its cells down-and-right from the anchor into the computed grid, like modern Excel/Sheets dynamic arrays. A spill whose target cells are not empty (a literal or another formula occupies them) is `#SPILL!` at the anchor and writes nothing beyond it. Spilled cells are read-only outputs (editing one is undefined and rejected by the session). Array values used *inside* a formula (e.g. `SUM(FILTER(...))`) never spill — only the outermost result does.
+A **top-level** formula that evaluates to `kindArray` spills its cells down-and-right from the anchor into the computed grid, like modern Excel/Sheets dynamic arrays. A spill whose target cells are not empty (a literal or another formula occupies them) is `#SPILL!` at the anchor and writes nothing beyond it. Spilled cells are read-only outputs (editing one is undefined and rejected by the session). Array values used _inside_ a formula (e.g. `SUM(FILTER(...))`) never spill — only the outermost result does.
 
 ### 5. Volatility & determinism
 
