@@ -6,3 +6,15 @@
 # which `go vet` flags — machine-authored lines the gate does not own.
 COVER_PKGS = $(shell go list ./... | grep -v /src/grammar)
 VET_PKGS = $(shell go list ./... | grep -v /src/grammar)
+
+# The browser playground: compile the engine (cmd/wasm, js/wasm-tagged so it is
+# invisible to the host gate) to WebAssembly and stage its runtime alongside the
+# authored web/playground/index.html into dist/ (gitignored). Deploying to the
+# docs site is copying dist/playground/* into ../docs.tsvsheet.go/static/playground/.
+PLAYGROUND := dist/playground
+.PHONY: wasm
+wasm: ## Build the browser playground (WASM engine + runtime) into dist/playground
+	mkdir -p $(PLAYGROUND)
+	GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o $(PLAYGROUND)/main.wasm ./cmd/wasm
+	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" $(PLAYGROUND)/wasm_exec.js
+	cp web/playground/index.html $(PLAYGROUND)/index.html

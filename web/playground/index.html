@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tsvsheet playground</title>
+<style>
+  :root {
+    --ink: #1b2733; --paper: #fbfaf6; --rule: #d9d6cc; --rule-strong: #b9b5a8;
+    --head: #6b7a86; --head-bg: #f0ede4; --formula: #f7f1e2; --formula-mark: #c98a1a;
+    --err: #b3261e; --err-bg: #fbe9e7; --accent: #1f5c8a;
+    --precedent-bg: #e4eef6; --dependent: #3f8f5b; --dependent-bg: #e6f2ea;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #d8dee6; --paper: #12161b; --rule: #29313a; --rule-strong: #3a444f;
+      --head: #7d8b98; --head-bg: #1a1f26; --formula: #221d12; --formula-mark: #d7a24a;
+      --err: #ff6b5e; --err-bg: #2a1613; --accent: #5aa0d6;
+      --precedent-bg: #14202b; --dependent: #5cae79; --dependent-bg: #16241b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #d8dee6; --paper: #12161b; --rule: #29313a; --rule-strong: #3a444f;
+    --head: #7d8b98; --head-bg: #1a1f26; --formula: #221d12; --formula-mark: #d7a24a;
+    --err: #ff6b5e; --err-bg: #2a1613; --accent: #5aa0d6;
+    --precedent-bg: #14202b; --dependent: #5cae79; --dependent-bg: #16241b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: var(--mono); color: var(--ink); background: var(--paper);
+    display: flex; flex-direction: column; font-size: 13px; line-height: 1.4;
+  }
+  header {
+    display: flex; align-items: baseline; gap: 1rem; padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--rule-strong); flex-wrap: wrap;
+  }
+  header .mark { font-weight: 700; letter-spacing: 0.02em; }
+  header .mark b { color: var(--accent); }
+  header .hint { color: var(--head); font-size: 12px; }
+  header .spacer { flex: 1; }
+  .reflegend { color: var(--head); font-size: 11px; display: none; gap: 0.9rem; align-items: center; }
+  .reflegend.on { display: inline-flex; }
+  .reflegend .swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px; vertical-align: -1px; margin-right: 0.3rem; }
+  .reflegend .swatch.prec { background: var(--precedent-bg); box-shadow: inset 0 0 0 2px var(--accent); }
+  .reflegend .swatch.dep { background: var(--dependent-bg); box-shadow: inset 0 0 0 2px var(--dependent); }
+  button {
+    font-family: var(--mono); font-size: 12px; color: var(--ink); background: var(--head-bg);
+    border: 1px solid var(--rule-strong); padding: 0.3rem 0.8rem; cursor: pointer; border-radius: 2px;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .tools { display: inline-flex; gap: 0.25rem; }
+  .tools button { padding: 0.25rem 0.5rem; font-size: 11px; }
+  .formula-bar { display: flex; align-items: stretch; border-bottom: 1px solid var(--rule-strong); }
+  .formula-bar .addr {
+    min-width: 3.5rem; padding: 0.4rem 0.6rem; background: var(--head-bg); color: var(--head);
+    border-right: 1px solid var(--rule); text-align: center; font-weight: 600;
+  }
+  #formula {
+    flex: 1; border: none; background: transparent; color: var(--ink);
+    font-family: var(--mono); font-size: 13px; padding: 0.4rem 0.8rem;
+  }
+  #formula:focus { outline: none; background: var(--head-bg); }
+  .body { flex: 1; display: flex; overflow: hidden; }
+  main { flex: 1; overflow: auto; padding: 1rem; }
+  aside {
+    width: 22rem; max-width: 45%; display: none; flex-direction: column;
+    border-left: 1px solid var(--rule-strong); background: var(--head-bg);
+  }
+  aside.on { display: flex; }
+  aside .title { padding: 0.4rem 0.8rem; color: var(--head); font-size: 11px; border-bottom: 1px solid var(--rule); }
+  #tsv {
+    flex: 1; border: none; resize: none; background: var(--paper); color: var(--ink);
+    font-family: var(--mono); font-size: 12px; padding: 0.8rem; line-height: 1.5; white-space: pre;
+  }
+  #tsv:focus { outline: none; }
+  .diagnostics { max-height: 22%; overflow: auto; padding: 0 1rem 0.6rem; }
+  .diag { color: var(--err); font-size: 12px; padding: 0.15rem 0; }
+  table { border-collapse: collapse; }
+  th, td {
+    border: 1px solid var(--rule); padding: 0.15rem 0.5rem; text-align: right;
+    white-space: pre; min-width: 2.8rem; height: 1.6rem;
+  }
+  thead th, td.rownum {
+    background: var(--head-bg); color: var(--head); text-align: center; font-weight: 500; position: sticky; top: 0;
+  }
+  td.rownum { position: sticky; left: 0; top: auto; text-align: right; }
+  td.cell { cursor: cell; }
+  td.cell:hover { outline: 1px solid var(--accent); outline-offset: -1px; }
+  td.formula { background: var(--formula); border-left: 2px solid var(--formula-mark); }
+  td.err { background: var(--err-bg); color: var(--err); }
+  td.selected { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; }
+  td.precedent { background: var(--precedent-bg); box-shadow: inset 0 0 0 2px var(--accent); }
+  td.dependent { background: var(--dependent-bg); box-shadow: inset 0 0 0 2px var(--dependent); }
+  td input { font-family: var(--mono); font-size: 13px; width: 100%; border: none; background: transparent; color: var(--ink); text-align: right; padding: 0; }
+  td input:focus { outline: none; }
+  .loading { padding: 2rem; color: var(--head); }
+</style>
+</head>
+<body>
+<header>
+  <span class="mark">tsv<b>sheet</b> playground</span>
+  <span class="hint">runs the real engine in your browser · arrows move · enter edits · =formula · TODAY/NOW/ISNOW live</span>
+  <span id="reflegend" class="reflegend">
+    <span><span class="swatch prec"></span>reads</span>
+    <span><span class="swatch dep"></span>read by</span>
+  </span>
+  <span class="spacer"></span>
+  <span class="tools" role="group" aria-label="Structure">
+    <button type="button" data-op="insert-row" title="Insert row above the selection">＋row</button>
+    <button type="button" data-op="delete-row" title="Delete the selected row">－row</button>
+    <button type="button" data-op="insert-col" title="Insert column left of the selection">＋col</button>
+    <button type="button" data-op="delete-col" title="Delete the selected column">－col</button>
+  </span>
+  <button id="tsvtoggle" type="button" title="Show the .tsvt source, editable live">TSV</button>
+  <button id="copy" type="button" title="Copy the .tsvt source to the clipboard">Copy</button>
+</header>
+<div class="formula-bar">
+  <span class="addr" id="addr">·</span>
+  <input id="formula" type="text" spellcheck="false" placeholder="select a cell" aria-label="Cell source">
+</div>
+<div class="body">
+  <main aria-label="Spreadsheet"><div id="grid"><p class="loading">loading the engine…</p></div></main>
+  <aside id="pane">
+    <div class="title">.tsvt source — edit here to load</div>
+    <textarea id="tsv" spellcheck="false" aria-label="TSV source"></textarea>
+  </aside>
+</div>
+<div id="diagnostics" class="diagnostics" aria-live="polite"></div>
+<script src="wasm_exec.js"></script>
+<script>
+(() => {
+  const ERR = /^#[A-Z]+\/?[A-Z0-9]*[!?]$/;
+  const VOLATILE = /\b(today|now|isnow)\s*\(/i;
+  const SAMPLE =
+    "item\tqty\tprice\tamount\n" +
+    "Widgets\t3\t4.50\t=B2*C2\n" +
+    "Gadgets\t2\t12.00\t=B3*C3\n" +
+    "Sprockets\t10\t0.99\t=B4*C4\n" +
+    "Total\t\t\t=sum(D2:D4)\n" +
+    "checked\t\t\t=now()\n";
+
+  const els = {
+    grid: document.getElementById("grid"),
+    formula: document.getElementById("formula"),
+    addr: document.getElementById("addr"),
+    diagnostics: document.getElementById("diagnostics"),
+    reflegend: document.getElementById("reflegend"),
+    pane: document.getElementById("pane"),
+    tsv: document.getElementById("tsv"),
+    tsvtoggle: document.getElementById("tsvtoggle"),
+    copy: document.getElementById("copy"),
+  };
+  let sheet = { computed: [], source: [] };
+  let sel = { row: 0, col: 0 };
+  let refreshTimer = null;
+
+  const colLabel = (n) => { let s = ""; for (n += 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; };
+  const a1 = (row, col) => colLabel(col) + (row + 1);
+  const at = (g, r, c) => (g[r] && g[r][c] !== undefined ? g[r][c] : "");
+  const tdAt = (r, c) => els.grid.querySelector(`td[data-row="${r}"][data-col="${c}"]`);
+
+  // engine — synchronous calls into the Go/WASM API on window.tsvsheet.
+  const engine = {
+    load: (src) => JSON.parse(tsvsheet.load(src)),
+    setCell: (r, c, t) => JSON.parse(tsvsheet.setCell(r, c, t)),
+    structure: (op, r, c) => JSON.parse(tsvsheet.structure(op, r, c)),
+    references: (cell) => JSON.parse(tsvsheet.references(cell)),
+    recompute: () => JSON.parse(tsvsheet.recompute()),
+    source: () => tsvsheet.source(),
+  };
+
+  function width(state) { return state.computed.concat(state.source).reduce((w, row) => Math.max(w, row.length), 0); }
+
+  function render(state) {
+    if (state.error) { reportError(state.error); return; }
+    sheet = state;
+    const w = width(state);
+    const table = document.createElement("table");
+    const head = document.createElement("thead");
+    const hr = document.createElement("tr");
+    hr.append(th(""));
+    for (let c = 0; c < w; c++) hr.append(th(colLabel(c)));
+    head.append(hr);
+    table.append(head);
+    for (let r = 0; r < state.computed.length; r++) table.append(bodyRow(state, r, w));
+    els.grid.replaceChildren(table);
+    renderSelection();
+    highlightReferences(sel.row, sel.col);
+    renderDiagnostics(state.diagnostics);
+    if (document.activeElement !== els.tsv) els.tsv.value = engine.source();
+    scheduleAutoRefresh();
+  }
+
+  function th(text) { const el = document.createElement("th"); el.textContent = text; return el; }
+
+  function bodyRow(state, r, w) {
+    const tr = document.createElement("tr");
+    const num = document.createElement("td");
+    num.className = "rownum"; num.textContent = r + 1;
+    tr.append(num);
+    for (let c = 0; c < w; c++) tr.append(cell(state, r, c));
+    return tr;
+  }
+
+  function cell(state, r, c) {
+    const td = document.createElement("td");
+    const value = at(state.computed, r, c), src = at(state.source, r, c);
+    td.textContent = value; td.className = "cell";
+    if (src.startsWith("=")) td.classList.add("formula");
+    if (ERR.test(value)) td.classList.add("err");
+    td.dataset.row = r; td.dataset.col = c;
+    td.addEventListener("click", () => select(r, c));
+    td.addEventListener("dblclick", () => editInCell(td, r, c));
+    return td;
+  }
+
+  function select(r, c) {
+    sel = { row: r, col: c };
+    renderSelection();
+    els.formula.value = at(sheet.source, r, c);
+    highlightReferences(r, c);
+  }
+
+  function renderSelection() {
+    els.grid.querySelectorAll("td.selected").forEach((td) => td.classList.remove("selected"));
+    const td = tdAt(sel.row, sel.col);
+    if (td) { td.classList.add("selected"); td.scrollIntoView({ block: "nearest", inline: "nearest" }); }
+    els.addr.textContent = a1(sel.row, sel.col);
+  }
+
+  function markSpan(from, to, cls) {
+    for (let r = Math.min(from.row, to.row); r <= Math.max(from.row, to.row); r++)
+      for (let c = Math.min(from.col, to.col); c <= Math.max(from.col, to.col); c++)
+        tdAt(r, c)?.classList.add(cls);
+  }
+
+  function highlightReferences(r, c) {
+    els.grid.querySelectorAll("td.precedent, td.dependent").forEach((td) => td.classList.remove("precedent", "dependent"));
+    const refs = engine.references(a1(r, c));
+    if (refs.error) { els.reflegend.classList.remove("on"); return; }
+    const prec = refs.precedents || [], deps = refs.dependents || [];
+    prec.forEach((s) => markSpan(s.from, s.to, "precedent"));
+    deps.forEach((d) => markSpan(d, d, "dependent"));
+    els.reflegend.classList.toggle("on", prec.length + deps.length > 0);
+  }
+
+  function commit(r, c, text) {
+    render(engine.setCell(r, c, text));
+    select(r, c);
+  }
+
+  function editInCell(td, r, c) {
+    const input = document.createElement("input");
+    input.value = at(sheet.source, r, c);
+    td.replaceChildren(input); input.focus(); input.select();
+    input.addEventListener("blur", () => commit(r, c, input.value));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") input.blur();
+      if (e.key === "Escape") { input.value = at(sheet.source, r, c); input.blur(); }
+    });
+  }
+
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const MOVES = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+  document.addEventListener("keydown", (e) => {
+    if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
+    const rows = sheet.computed.length, cols = width(sheet);
+    if (MOVES[e.key]) {
+      e.preventDefault();
+      const [dr, dc] = MOVES[e.key];
+      select(clamp(sel.row + dr, 0, rows - 1), clamp(sel.col + dc, 0, cols - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const td = tdAt(sel.row, sel.col);
+      if (td) editInCell(td, sel.row, sel.col);
+    }
+  });
+
+  els.formula.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") commit(sel.row, sel.col, els.formula.value);
+    if (e.key === "Escape") els.formula.value = at(sheet.source, sel.row, sel.col);
+  });
+
+  document.querySelectorAll(".tools button").forEach((btn) =>
+    btn.addEventListener("click", () => { render(engine.structure(btn.dataset.op, sel.row, sel.col)); select(sel.row, sel.col); }));
+
+  // Live TSV pane: edit raw .tsvt on the right to reload the whole sheet.
+  els.tsvtoggle.addEventListener("click", () => {
+    const on = els.pane.classList.toggle("on");
+    els.tsvtoggle.style.borderColor = on ? "var(--accent)" : "";
+    if (on) els.tsv.value = engine.source();
+  });
+  els.tsv.addEventListener("input", () => render(engine.load(els.tsv.value)));
+
+  els.copy.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(engine.source()); flash(els.copy, "Copied"); }
+    catch { flash(els.copy, "Copy failed"); }
+  });
+  function flash(btn, text) { const prev = btn.textContent; btn.textContent = text; setTimeout(() => (btn.textContent = prev), 1200); }
+
+  function scheduleAutoRefresh() {
+    const volatile = VOLATILE.test(engine.source());
+    if (volatile && !refreshTimer) {
+      refreshTimer = setInterval(() => {
+        if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
+        render(engine.recompute());
+      }, 1000);
+    } else if (!volatile && refreshTimer) {
+      clearInterval(refreshTimer); refreshTimer = null;
+    }
+  }
+
+  function renderDiagnostics(diags) {
+    els.diagnostics.replaceChildren(...(diags || []).map((d) => Object.assign(document.createElement("div"), { className: "diag", textContent: `${d.cell}: ${d.message}` })));
+  }
+  function reportError(msg) {
+    els.diagnostics.replaceChildren(Object.assign(document.createElement("div"), { className: "diag", textContent: msg }));
+  }
+
+  // Boot: instantiate the Go/WASM engine, then load the sample sheet.
+  const go = new Go();
+  WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+    .then((result) => { go.run(result.instance); render(engine.load(SAMPLE)); })
+    .catch((err) => { els.grid.innerHTML = '<p class="loading">Failed to load the engine: ' + err + "</p>"; });
+})();
+</script>
+</body>
+</html>
