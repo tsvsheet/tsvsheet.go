@@ -65,6 +65,14 @@ func TestCLI_Parse(t *testing.T) {
 	out, err := runCLI(t, "parse")
 	require.NoError(t, err)
 	assert.Contains(t, out, `"formula": true`)
+	assert.NotContains(t, out, `"value"`) // no computed value without the flag
+}
+
+func TestCLI_ParseWithValue(t *testing.T) {
+	withStdin(t, sampleSheet)
+	out, err := runCLI(t, "parse", "--value")
+	require.NoError(t, err)
+	assert.Contains(t, out, `"value": "5"`) // D2 = B2+C2 = 5, included by --value
 }
 
 func TestCLI_CheckClean(t *testing.T) {
@@ -135,7 +143,7 @@ func TestRunParse_ReadError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runParse(streams, "-")
+	err := runParse(streams, "-", false)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrReadInput)
 }

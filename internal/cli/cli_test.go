@@ -195,7 +195,7 @@ func TestRunParse_JSON(t *testing.T) {
 
 	// A middle empty cell is skipped; a literal and a formula are projected.
 	streams, out, _ := streamsWith("a\t\t=A1\n")
-	require.NoError(t, runParse(streams, "-"))
+	require.NoError(t, runParse(streams, "-", false))
 	body := out.String()
 	assert.Contains(t, body, `"cell": "A1"`)
 	assert.Contains(t, body, `"source": "a"`)
@@ -208,7 +208,7 @@ func TestRunParse_SyntaxError(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("1\t=sum(\n")
-	err := runParse(streams, "-")
+	err := runParse(streams, "-", false)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrSyntax)
 }
@@ -217,7 +217,7 @@ func TestRunParse_FileMissing(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("")
-	err := runParse(streams, "/no/such.tsvt")
+	err := runParse(streams, "/no/such.tsvt", false)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }
