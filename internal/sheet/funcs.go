@@ -74,11 +74,11 @@ func stringOrder(op tsvt.BinaryOp, l, r textVal) bool {
 // an unknown name is #NAME? and a call outside the function's arity bounds is
 // #VALUE!.
 func (r resolver) evalCall(call tsvt.Call) Value {
-	name := strings.ToLower(call.Name)
-	if name == "if" {
-		return r.evalIf(call.Args)
+	name := funcName(strings.ToLower(call.Name))
+	if v, ok := r.evalLazy(name, call.Args); ok {
+		return v
 	}
-	fn, known := functions[name]
+	fn, known := functions[string(name)]
 	if !known {
 		return errorValue(ErrName)
 	}
@@ -90,6 +90,78 @@ func (r resolver) evalCall(call tsvt.Call) Value {
 		return bad
 	}
 	return fn.impl(values)
+}
+
+// evalLazy dispatches the builtins that evaluate their own arguments — the
+// selective conditionals and the single-argument inspectors, which must observe
+// errors and empties rather than have them short-circuited by the eager path.
+// ok is false for any other (eager) name.
+func (r resolver) evalLazy(name funcName, args []tsvt.Expr) (Value, boolResult) {
+	if v, ok := r.evalConditional(name, args); ok {
+		return v, true
+	}
+	return r.evalInspector(name, args)
+}
+
+// evalConditional handles the selectively-lazy conditionals, which evaluate
+// only the arguments they need. ok is false for a non-conditional name.
+func (r resolver) evalConditional(name funcName, args []tsvt.Expr) (Value, boolResult) {
+	switch name {
+	case "if":
+		return r.evalIf(args), true
+	case "ifs":
+		return r.evalIfs(args), true
+	case "iferror":
+		return r.evalIferror(args, false), true
+	case "ifna":
+		return r.evalIferror(args, true), true
+	case "switch":
+		return r.evalSwitch(args), true
+	default:
+		return Value{}, false
+	}
+}
+
+// isConditional reports whether name is one of the lazy conditional builtins.
+func isConditional(name funcName) boolResult {
+	switch name {
+	case "if", "ifs", "iferror", "ifna", "switch":
+		return true
+	default:
+		return false
+	}
+}
+
+// evalInspector handles the single-argument inspectors (`IS*`, `N`, `TYPE`): it
+// evaluates the argument (observing an error or empty result) and applies the
+// pure inspector function.
+func (r resolver) evalInspector(name funcName, args []tsvt.Expr) (Value, boolResult) {
+	fn, ok := inspectors[string(name)]
+	if !ok {
+		return Value{}, false
+	}
+	if len(args) != 1 {
+		return errorValue(ErrValue), true
+	}
+	return fn(r.eval(args[0])), true
+}
+
+// inspectors are the pure single-argument value functions behind the `IS*`,
+// `N`, and `TYPE` builtins. They take an already-evaluated value, so this map
+// holds no reference back into evalCall and stays a cycle-free var initializer.
+var inspectors = map[string]func(v Value) Value{
+	"isblank":   func(v Value) Value { return boolValue(v.kind == kindEmpty) },
+	"iserror":   func(v Value) Value { return boolValue(boolResult(v.isError())) },
+	"iserr":     func(v Value) Value { return boolValue(boolResult(v.isError()) && v.str != string(ErrNA)) },
+	"isna":      func(v Value) Value { return boolValue(boolResult(v.isError()) && v.str == string(ErrNA)) },
+	"isnumber":  func(v Value) Value { return boolValue(v.kind == kindNumber) },
+	"istext":    func(v Value) Value { return boolValue(v.kind == kindString) },
+	"isnontext": func(v Value) Value { return boolValue(v.kind != kindString) },
+	"islogical": func(v Value) Value { return boolValue(v.kind == kindBool) },
+	"iseven":    func(v Value) Value { return parityIs(v, false) },
+	"isodd":     func(v Value) Value { return parityIs(v, true) },
+	"n":         inspectN,
+	"type":      func(v Value) Value { return numberValue(floatVal(typeCode(v))) },
 }
 
 // function is a registered eager builtin: its arity bounds and its impl over
@@ -197,4 +269,13 @@ var functions = map[string]function{
 	"tanh":     {impl: unaryNumeric(mTanh), minArgs: 1, maxArgs: 1},
 	"degrees":  {impl: unaryNumeric(toDegrees), minArgs: 1, maxArgs: 1},
 	"radians":  {impl: unaryNumeric(toRadians), minArgs: 1, maxArgs: 1},
+
+	// Phase 2 — logical (eager; conditionals and inspectors dispatch lazily).
+	"and":   {impl: fnAnd, minArgs: 1, maxArgs: -1},
+	"or":    {impl: fnOr, minArgs: 1, maxArgs: -1},
+	"xor":   {impl: fnXor, minArgs: 1, maxArgs: -1},
+	"not":   {impl: fnNot, minArgs: 1, maxArgs: 1},
+	"true":  {impl: fnTrue, minArgs: 0, maxArgs: 0},
+	"false": {impl: fnFalse, minArgs: 0, maxArgs: 0},
+	"na":    {impl: fnNa, minArgs: 0, maxArgs: 0},
 }

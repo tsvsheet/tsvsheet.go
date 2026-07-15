@@ -41,14 +41,17 @@ func unknownFunctions(expr tsvt.Expr, at Address) []Diagnostic {
 	return diags
 }
 
-// isKnownFunc reports whether name (case-insensitive) is a builtin, including
-// the lazily-dispatched `if`.
+// isKnownFunc reports whether name (case-insensitive) is a builtin: an eager
+// registry function, a lazy conditional, or a value predicate.
 func isKnownFunc(name funcName) boolResult {
-	lower := strings.ToLower(string(name))
-	if lower == "if" {
+	lower := funcName(strings.ToLower(string(name)))
+	if isConditional(lower) {
 		return true
 	}
-	_, ok := functions[lower]
+	if _, ok := inspectors[string(lower)]; ok {
+		return true
+	}
+	_, ok := functions[string(lower)]
 	return boolResult(ok)
 }
 
