@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/session"
 	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
@@ -36,6 +37,7 @@ func (srv Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/save", srv.handleSave)
 	mux.HandleFunc("GET /api/explain", srv.handleExplain)
 	mux.HandleFunc("GET /api/references", srv.handleReferences)
+	mux.HandleFunc("POST /api/structure", srv.handleStructure)
 	mux.Handle("GET /", uiHandler())
 	return mux
 }
@@ -95,6 +97,57 @@ func (srv Server) handleExplain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, trace)
+}
+
+// structureOp names a structural edit: inserting or deleting a row or column,
+// relative to a cell.
+type structureOp string
+
+const (
+	opInsertRow structureOp = "insert-row"
+	opDeleteRow structureOp = "delete-row"
+	opInsertCol structureOp = "insert-col"
+	opDeleteCol structureOp = "delete-col"
+)
+
+// structureRequest is the POST /api/structure body: the op and the 0-based cell
+// it is relative to.
+type structureRequest struct {
+	Op  structureOp `json:"op"`
+	Row int         `json:"row"`
+	Col int         `json:"col"`
+}
+
+// handleStructure applies a row/column insert or delete and returns the new
+// state; an unknown op is a 400.
+func (srv Server) handleStructure(w http.ResponseWriter, r *http.Request) {
+	var req structureRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	if !srv.applyStructure(req.Op, sheet.Address{Row: req.Row, Col: req.Col}) {
+		writeError(w, http.StatusBadRequest, constants.ErrInvalidValue.With(nil, "op", string(req.Op)))
+		return
+	}
+	writeJSON(w, http.StatusOK, srv.session.Snapshot())
+}
+
+// applyStructure dispatches a structural op to the session; the boolean reports
+// whether the op was recognised.
+func (srv Server) applyStructure(op structureOp, at sheet.Address) bool {
+	switch op {
+	case opInsertRow:
+		srv.session.InsertRow(at)
+	case opDeleteRow:
+		srv.session.DeleteRow(at)
+	case opInsertCol:
+		srv.session.InsertCol(at)
+	case opDeleteCol:
+		srv.session.DeleteCol(at)
+	default:
+		return false
+	}
+	return true
 }
 
 // referencesResponse is the GET /api/references body: the selected cell's

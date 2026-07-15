@@ -67,6 +67,37 @@ func (s *Session) SetCell(at sheet.Address, text string) error {
 	return nil
 }
 
+// structuralEdit applies a whole-grid transform (a row or column insert or
+// delete), recomputes, and marks the session dirty. Structural edits never
+// fail: an out-of-range index is a no-op inside the engine.
+func (s *Session) structuralEdit(edit func(sheet.Sheet) sheet.Sheet) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sheet = edit(s.sheet)
+	s.isDirty = true
+	s.recompute()
+}
+
+// InsertRow inserts a blank row before at.Row, shifting references down.
+func (s *Session) InsertRow(at sheet.Address) {
+	s.structuralEdit(func(sh sheet.Sheet) sheet.Sheet { return sh.InsertRow(at) })
+}
+
+// DeleteRow removes row at.Row, turning references to it into #REF!.
+func (s *Session) DeleteRow(at sheet.Address) {
+	s.structuralEdit(func(sh sheet.Sheet) sheet.Sheet { return sh.DeleteRow(at) })
+}
+
+// InsertCol inserts a blank column before at.Col, shifting references right.
+func (s *Session) InsertCol(at sheet.Address) {
+	s.structuralEdit(func(sh sheet.Sheet) sheet.Sheet { return sh.InsertCol(at) })
+}
+
+// DeleteCol removes column at.Col, turning references to it into #REF!.
+func (s *Session) DeleteCol(at sheet.Address) {
+	s.structuralEdit(func(sh sheet.Sheet) sheet.Sheet { return sh.DeleteCol(at) })
+}
+
 // Snapshot returns a deep-copied read model safe for the caller to hold and
 // mutate.
 func (s *Session) Snapshot() State {

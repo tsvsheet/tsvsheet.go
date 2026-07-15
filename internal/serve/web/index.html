@@ -87,6 +87,8 @@
   td.selected { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; }
   td.precedent { background: var(--precedent-bg); box-shadow: inset 0 0 0 2px var(--accent); }
   td.dependent { background: var(--dependent-bg); box-shadow: inset 0 0 0 2px var(--dependent); }
+  .tools { display: inline-flex; gap: 0.25rem; }
+  .tools button { padding: 0.25rem 0.5rem; font-size: 11px; }
   .reflegend { color: var(--head); font-size: 11px; display: none; gap: 0.9rem; align-items: center; }
   .reflegend.on { display: inline-flex; }
   .reflegend .swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px; vertical-align: -1px; margin-right: 0.3rem; }
@@ -110,6 +112,12 @@
   </span>
   <span class="spacer"></span>
   <span id="state" class="state">loading…</span>
+  <span class="tools" role="group" aria-label="Structure">
+    <button type="button" data-op="insert-row" title="Insert row above the selection">＋row</button>
+    <button type="button" data-op="delete-row" title="Delete the selected row">－row</button>
+    <button type="button" data-op="insert-col" title="Insert column left of the selection">＋col</button>
+    <button type="button" data-op="delete-col" title="Delete the selected column">－col</button>
+  </span>
   <button id="save" type="button">Save</button>
 </header>
 <div class="formula-bar">
@@ -290,6 +298,19 @@
       className: "diag", textContent: err.message,
     }));
   }
+
+  // structure applies a row/column insert or delete relative to the selection.
+  async function structure(op) {
+    try {
+      render(await api("POST", "/api/structure", { op, row: sel.row, col: sel.col }));
+      select(sel.row, sel.col);
+    } catch (err) {
+      reportError(err);
+    }
+  }
+
+  document.querySelectorAll(".tools button").forEach((btn) =>
+    btn.addEventListener("click", () => structure(btn.dataset.op)));
 
   els.save.addEventListener("click", async () => {
     try {

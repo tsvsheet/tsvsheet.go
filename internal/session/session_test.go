@@ -41,6 +41,40 @@ func TestReferences_PrecedentsAndDependents(t *testing.T) {
 	assert.Equal(t, []sheet.Address{{Row: 1, Col: 3}}, deps) // B2 read by D2
 }
 
+func TestInsertRow_GrowsAndDirties(t *testing.T) {
+	t.Parallel()
+
+	s := newSession(t)
+	s.InsertRow(sheet.Address{Row: 1})
+	st := s.Snapshot()
+	assert.Len(t, st.Source, 4) // 3 rows → 4
+	assert.True(t, st.IsDirty)
+}
+
+func TestDeleteRow_Shrinks(t *testing.T) {
+	t.Parallel()
+
+	s := newSession(t)
+	s.DeleteRow(sheet.Address{Row: 1})
+	assert.Len(t, s.Snapshot().Source, 2)
+}
+
+func TestInsertCol_Widens(t *testing.T) {
+	t.Parallel()
+
+	s := newSession(t)
+	s.InsertCol(sheet.Address{Col: 1})
+	assert.Len(t, s.Snapshot().Source[0], 5) // 4 cols → 5
+}
+
+func TestDeleteCol_Narrows(t *testing.T) {
+	t.Parallel()
+
+	s := newSession(t)
+	s.DeleteCol(sheet.Address{Col: 1})
+	assert.Len(t, s.Snapshot().Source[0], 3)
+}
+
 func TestNew_ComputesEagerly(t *testing.T) {
 	t.Parallel()
 

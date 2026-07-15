@@ -3,6 +3,7 @@ package serve_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -168,6 +169,52 @@ func TestReferences_BadCell(t *testing.T) {
 
 	srv, _ := testServer(t)
 	rec := do(t, srv, http.MethodGet, "/api/references?cell=bogus", "")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestStructure_AllOps(t *testing.T) {
+	t.Parallel()
+
+	// sampleSheet is 3 rows × 4 columns; each op reshapes it relative to (1,1).
+	cases := []struct {
+		op       string
+		wantRows int
+		wantCols int
+	}{
+		{"insert-row", 4, 4},
+		{"delete-row", 2, 4},
+		{"insert-col", 3, 5},
+		{"delete-col", 3, 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.op, func(t *testing.T) {
+			t.Parallel()
+			srv, _ := testServer(t)
+			rec := do(t, srv, http.MethodPost, "/api/structure", fmt.Sprintf(`{"op":%q,"row":1,"col":1}`, tc.op))
+			require.Equal(t, http.StatusOK, rec.Code)
+
+			var state session.State
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &state))
+			assert.Len(t, state.Source, tc.wantRows)
+			assert.Len(t, state.Source[0], tc.wantCols)
+			assert.True(t, state.IsDirty)
+		})
+	}
+}
+
+func TestStructure_UnknownOp(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := testServer(t)
+	rec := do(t, srv, http.MethodPost, "/api/structure", `{"op":"bogus","row":0,"col":0}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestStructure_BadBody(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := testServer(t)
+	rec := do(t, srv, http.MethodPost, "/api/structure", `not json`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
