@@ -193,15 +193,51 @@ func TestRunExplain_FileMissing(t *testing.T) {
 func TestRunParse_JSON(t *testing.T) {
 	t.Parallel()
 
-	// A middle empty cell is skipped; a literal and a formula are projected.
+	// The source grid is emitted verbatim as "rows"; without --value there is
+	// no "values".
 	streams, out, _ := streamsWith("a\t\t=A1\n")
 	require.NoError(t, runParse(streams, "-", false, false))
 	body := out.String()
-	assert.Contains(t, body, `"cell": "A1"`)
-	assert.Contains(t, body, `"source": "a"`)
-	assert.Contains(t, body, `"cell": "C1"`)
-	assert.Contains(t, body, `"formula": true`)
-	assert.NotContains(t, body, `"cell": "B1"`) // empty cell omitted
+	assert.Contains(t, body, `"rows"`)
+	assert.Contains(t, body, `"=A1"`)
+	assert.NotContains(t, body, `"values"`)
+}
+
+func TestRunParse_WithValues(t *testing.T) {
+	t.Parallel()
+
+	// --value adds the computed grid.
+	streams, out, _ := streamsWith("2\t=A1*10\n")
+	require.NoError(t, runParse(streams, "-", true, false))
+	body := out.String()
+	assert.Contains(t, body, `"values"`)
+	assert.Contains(t, body, `"20"`) // A1*10 = 20
+}
+
+func TestRunFromJSON_RoundTrip(t *testing.T) {
+	t.Parallel()
+
+	streams, out, _ := streamsWith(`{"rows":[["a","","=A1"],["1","2","3"]]}`)
+	require.NoError(t, runFromJSON(streams, "-"))
+	assert.Equal(t, "a\t\t=A1\n1\t2\t3\n", out.String())
+}
+
+func TestRunFromJSON_BadJSON(t *testing.T) {
+	t.Parallel()
+
+	streams, _, _ := streamsWith("not json")
+	err := runFromJSON(streams, "-")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrSyntax)
+}
+
+func TestRunFromJSON_FileMissing(t *testing.T) {
+	t.Parallel()
+
+	streams, _, _ := streamsWith("")
+	err := runFromJSON(streams, "/no/such.json")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }
 
 func TestRunParse_SyntaxError(t *testing.T) {
