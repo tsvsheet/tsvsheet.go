@@ -100,9 +100,13 @@ func (c cellset) scalar() Value {
 	return errorValue(ErrValue)
 }
 
-// resolveOperand resolves a reference operand: a single A1 cell or an A1 range.
+// resolveOperand resolves a reference operand: a single A1 cell or an A1 range,
+// read from another sheet when the reference carries a `"file"!` qualifier.
 func (r resolver) resolveOperand(ref tsvt.Reference) cellset {
 	rangeRef := ref.(tsvt.RangeRef)
+	if rangeRef.File != "" {
+		return r.foreignCells(rangeRef)
+	}
 	if rangeRef.To == nil {
 		return r.resolveSingle(rangeRef.From)
 	}
@@ -169,9 +173,13 @@ func (r resolver) argMatrix(arg tsvt.Expr) [][]Value {
 }
 
 // rangeMatrix resolves an A1 reference to its rows×columns of values; an
-// off-grid endpoint yields a 1×1 #REF! block.
+// off-grid endpoint yields a 1×1 #REF! block. A `"file"!` qualifier reads the
+// block from another sheet.
 func (r resolver) rangeMatrix(ref tsvt.Reference) [][]Value {
 	rangeRef := ref.(tsvt.RangeRef)
+	if rangeRef.File != "" {
+		return r.foreignMatrix(rangeRef)
+	}
 	from, fromOK := a1Address(rangeRef.From)
 	to, toOK := from, fromOK
 	if rangeRef.To != nil {

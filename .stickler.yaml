@@ -7,6 +7,12 @@
 # named on the command line. The os.WriteFile path originates in os.Args, so the
 # taint analysis flags it — but writing the user's own positional <sheet>
 # argument is precisely the command's purpose, not an untrusted traversal sink.
+#
+# G304 ("file inclusion via variable") is likewise a false positive for the
+# internal/loader sheet.Loader: reading the file a SHEET(...) embed or a
+# "file"!A1 cross-sheet reference names — bare, relative, or absolute — is the
+# feature itself, over the operator's own local spreadsheets, not an untrusted
+# inclusion sink.
 config:
   golangci-lint:
     linters:
@@ -15,3 +21,4 @@ config:
           excludes:
             add:
               - G703
+              - G304

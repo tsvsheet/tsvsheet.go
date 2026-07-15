@@ -49,13 +49,24 @@ func renderCall(call tsvt.Call) string {
 	return call.Name + "(" + strings.Join(args, ",") + ")"
 }
 
-// RenderReference reconstructs an A1 reference: a cell or a two-cell range.
+// RenderReference reconstructs an A1 reference: a cell or a two-cell range,
+// with its `"file"!` sheet qualifier when present.
 func RenderReference(ref tsvt.Reference) string {
 	rangeRef := ref.(tsvt.RangeRef)
-	if rangeRef.To == nil {
-		return renderCell(rangeRef.From)
+	body := renderCell(rangeRef.From)
+	if rangeRef.To != nil {
+		body += ":" + renderCell(*rangeRef.To)
 	}
-	return renderCell(rangeRef.From) + ":" + renderCell(*rangeRef.To)
+	return renderQualifier(Path(rangeRef.File)) + body
+}
+
+// renderQualifier reconstructs a `"file"!` sheet qualifier, or "" for the
+// current sheet.
+func renderQualifier(file Path) string {
+	if file == "" {
+		return ""
+	}
+	return `"` + string(file) + `"!`
 }
 
 // renderCell reconstructs one A1 cell (`B2`).

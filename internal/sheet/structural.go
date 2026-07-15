@@ -215,6 +215,9 @@ func rewriteCell(cl cell, ax axis, tr transform) cell {
 // the edit deletes the cell (or collapses the range) it names.
 func shiftReference(ref tsvt.Reference, ax axis, tr transform) tsvt.Expr {
 	rangeRef := ref.(tsvt.RangeRef)
+	if rangeRef.File != "" {
+		return tsvt.RefOperand{Ref: rangeRef} // a cross-sheet ref addresses another sheet — never shift it
+	}
 	if rangeRef.To == nil {
 		moved, ok := tr.point(ax.get(rangeRef.From))
 		if !ok {

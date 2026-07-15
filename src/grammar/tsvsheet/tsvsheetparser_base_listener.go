@@ -122,6 +122,12 @@ func (s *BaseTsvsheetParserListener) EnterReference(ctx *ReferenceContext) {}
 // ExitReference is called when production reference is exited.
 func (s *BaseTsvsheetParserListener) ExitReference(ctx *ReferenceContext) {}
 
+// EnterSheetQualifier is called when production sheetQualifier is entered.
+func (s *BaseTsvsheetParserListener) EnterSheetQualifier(ctx *SheetQualifierContext) {}
+
+// ExitSheetQualifier is called when production sheetQualifier is exited.
+func (s *BaseTsvsheetParserListener) ExitSheetQualifier(ctx *SheetQualifierContext) {}
+
 // EnterCellRef is called when production cellRef is entered.
 func (s *BaseTsvsheetParserListener) EnterCellRef(ctx *CellRefContext) {}
 

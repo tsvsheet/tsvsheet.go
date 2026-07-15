@@ -109,15 +109,17 @@ func TestExplain_RendersEveryExpressionForm(t *testing.T) {
 
 	// Each formula exercises one RenderExpr branch; the rendered form round-trips.
 	cases := map[string]string{
-		"=42":      "42",
-		`="hi"`:    `"hi"`,
-		"=TRUE":    "TRUE",
-		"=FALSE":   "FALSE",
-		"=#N/A":    "#N/A",
-		"=-A1":     "-A1",
-		"=A1%":     "A1%",
-		"=A1 + 1":  "A1 + 1",
-		"=abs(A1)": "abs(A1)",
+		"=42":              "42",
+		`="hi"`:            `"hi"`,
+		"=TRUE":            "TRUE",
+		"=FALSE":           "FALSE",
+		"=#N/A":            "#N/A",
+		"=-A1":             "-A1",
+		"=A1%":             "A1%",
+		"=A1 + 1":          "A1 + 1",
+		"=abs(A1)":         "abs(A1)",
+		`="other.tsvt"!A1`: `"other.tsvt"!A1`, // cross-sheet single cell
+		`="d.tsvt"!A1:B2`:  `"d.tsvt"!A1:B2`,  // cross-sheet range
 	}
 	for src, want := range cases {
 		t.Run(src, func(t *testing.T) {

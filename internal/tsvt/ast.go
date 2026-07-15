@@ -110,9 +110,12 @@ type ErrorLit struct {
 type Reference interface{ isReference() }
 
 // RangeRef is a single A1 cell (To nil) or a rectangular range of two cells.
+// File is a `"path"!` sheet qualifier — empty for the current sheet, otherwise
+// the path (relative, bare, or absolute) of the sheet the cells are read from.
 type RangeRef struct {
 	referenceMarker
 	To   *CellRef
+	File string
 	From CellRef
 }
 

@@ -75,6 +75,10 @@ func (v *BaseTsvsheetParserVisitor) VisitReference(ctx *ReferenceContext) interf
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseTsvsheetParserVisitor) VisitSheetQualifier(ctx *SheetQualifierContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseTsvsheetParserVisitor) VisitCellRef(ctx *CellRefContext) interface{} {
 	return v.VisitChildren(ctx)
 }

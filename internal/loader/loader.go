@@ -1,52 +1,48 @@
-// Package loader is the filesystem sheet.Loader for embedded sub-sheets: it
-// resolves a SHEET("path") reference to a parsed sheet, confined to a root
-// directory via os.Root so a reference can never escape it (no `..` traversal,
-// no symlink escape). The engine (internal/sheet) stays filesystem-free; this
-// package is injected by the frontends (serve, cli).
+// Package loader is the filesystem sheet.Loader for embedded sub-sheets and
+// cross-sheet references: it resolves a path (bare, relative, or absolute) to a
+// parsed sheet. A bare or relative path resolves against the embedding sheet's
+// own directory (the top sheet's against the root the frontend fixes); an
+// absolute path is read as given. The engine (internal/sheet) stays
+// filesystem-free; this package is injected by the frontends (serve, cli).
 package loader
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
-// Dir is a directory path that bounds sheet resolution: every SHEET reference
-// resolves within it.
+// Dir is the directory a top sheet's bare or relative references resolve
+// against.
 type Dir string
 
-// FS returns a sheet.Loader confined to root. A reference is resolved relative to
-// the embedding sheet's own directory and opened through os.Root, which rejects
-// any path escaping root (no `..` traversal, no symlink escape). The root is
-// opened per call, so an unopenable root surfaces as a load error (#REF!) rather
-// than failing construction.
+// FS returns a sheet.Loader rooted at root: it resolves the reference to a
+// filesystem path, reads it, and parses it. The resolved (cleaned) path is
+// returned for cycle detection and as the base for the sub-sheet's own
+// references.
 func FS(root Dir) sheet.Loader {
 	return func(base, ref sheet.Path) (sheet.Sheet, sheet.Path, error) {
-		confined, err := os.OpenRoot(string(root))
+		target := resolvePath(root, base, ref)
+		data, err := os.ReadFile(string(target))
 		if err != nil {
 			return sheet.Sheet{}, "", err
 		}
-		defer func() { _ = confined.Close() }()
-		target := filepath.Clean(filepath.Join(filepath.Dir(string(base)), string(ref)))
-		return load(confined, sheet.Path(target))
+		parsed, err := sheet.Parse(data)
+		return parsed, target, err
 	}
 }
 
-// load opens target within the confined root, reads it, and parses it. Its
-// resolved path (root-relative) is returned for cycle detection and as the base
-// for the sub-sheet's own references.
-func load(confined *os.Root, target sheet.Path) (sheet.Sheet, sheet.Path, error) {
-	file, err := confined.Open(string(target))
-	if err != nil {
-		return sheet.Sheet{}, "", err
+// resolvePath resolves ref to a cleaned filesystem path: an absolute ref as
+// given; a bare or relative ref against the embedding sheet's directory (or
+// root, for the top sheet whose base is a bare filename).
+func resolvePath(root Dir, base, ref sheet.Path) sheet.Path {
+	if filepath.IsAbs(string(ref)) {
+		return sheet.Path(filepath.Clean(string(ref)))
 	}
-	defer func() { _ = file.Close() }()
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return sheet.Sheet{}, "", err
+	dir := filepath.Dir(string(base))
+	if dir == "." {
+		dir = string(root)
 	}
-	parsed, err := sheet.Parse(data)
-	return parsed, target, err
+	return sheet.Path(filepath.Clean(filepath.Join(dir, string(ref))))
 }

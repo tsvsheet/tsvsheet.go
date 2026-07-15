@@ -40,6 +40,9 @@ func (s Sheet) Precedents(at Address) []Span {
 // flat grid has no cell for).
 func refSpan(ref tsvt.Reference) (Span, boolResult) {
 	rangeRef := ref.(tsvt.RangeRef)
+	if rangeRef.File != "" {
+		return Span{}, false // a cross-sheet reference is not a local span
+	}
 	from, ok := a1Address(rangeRef.From)
 	if !ok {
 		return Span{}, false

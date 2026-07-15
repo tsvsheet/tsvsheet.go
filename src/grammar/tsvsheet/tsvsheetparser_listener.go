@@ -58,6 +58,9 @@ type TsvsheetParserListener interface {
 	// EnterReference is called when entering the reference production.
 	EnterReference(c *ReferenceContext)
 
+	// EnterSheetQualifier is called when entering the sheetQualifier production.
+	EnterSheetQualifier(c *SheetQualifierContext)
+
 	// EnterCellRef is called when entering the cellRef production.
 	EnterCellRef(c *CellRefContext)
 
@@ -111,6 +114,9 @@ type TsvsheetParserListener interface {
 
 	// ExitReference is called when exiting the reference production.
 	ExitReference(c *ReferenceContext)
+
+	// ExitSheetQualifier is called when exiting the sheetQualifier production.
+	ExitSheetQualifier(c *SheetQualifierContext)
 
 	// ExitCellRef is called when exiting the cellRef production.
 	ExitCellRef(c *CellRefContext)

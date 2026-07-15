@@ -12,60 +12,62 @@ import (
 	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
-// write creates a file under dir.
-func write(t *testing.T, dir, name, content string) {
+// write creates a file (making parent directories) under dir.
+func write(t *testing.T, dir, name, content string) string {
 	t.Helper()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
+	path := filepath.Join(dir, name)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	return path
 }
 
-func TestFS_OpenRootFails(t *testing.T) {
+func TestFS_BareResolvesAgainstRoot(t *testing.T) {
 	t.Parallel()
 
-	// A root that cannot be opened surfaces as a load error, not a build error.
-	ld := loader.FS(loader.Dir(filepath.Join(t.TempDir(), "does-not-exist")))
-	_, _, err := ld("main.tsvt", "child.tsvt")
-	require.Error(t, err)
-}
-
-func TestFS_LoadsAndResolvesRelative(t *testing.T) {
-	t.Parallel()
-
+	// A bare reference from the top sheet (base has no directory) resolves in
+	// the root, and the resolved path is returned for the sub-sheet's own refs.
 	dir := t.TempDir()
 	write(t, dir, "child.tsvt", "=output(42)\n")
 	ld := loader.FS(loader.Dir(dir))
 
 	sub, resolved, err := ld("main.tsvt", "child.tsvt")
 	require.NoError(t, err)
-	assert.Equal(t, sheet.Path("child.tsvt"), resolved)
+	assert.Equal(t, sheet.Path(filepath.Join(dir, "child.tsvt")), resolved)
 	assert.Equal(t, "42", sub.Compute()[0][0])
 }
 
-func TestFS_EscapeIsRejected(t *testing.T) {
+func TestFS_RelativeFromSubdirBase(t *testing.T) {
 	t.Parallel()
 
-	ld := loader.FS(loader.Dir(t.TempDir()))
+	// A relative reference from a sub-sheet whose base carries a directory
+	// resolves against that directory (the dir != "." branch).
+	dir := t.TempDir()
+	write(t, dir, "sub/leaf.tsvt", "=output(7)\n")
+	ld := loader.FS(loader.Dir(dir))
 
-	_, _, err := ld("main.tsvt", "../escape.tsvt")
-	require.Error(t, err) // os.Root refuses to leave the root
+	_, resolved, err := ld(sheet.Path(filepath.Join(dir, "sub", "mid.tsvt")), "leaf.tsvt")
+	require.NoError(t, err)
+	assert.Equal(t, sheet.Path(filepath.Join(dir, "sub", "leaf.tsvt")), resolved)
+}
+
+func TestFS_AbsoluteReference(t *testing.T) {
+	t.Parallel()
+
+	// An absolute reference is read as given, regardless of base or root.
+	dir := t.TempDir()
+	abs := write(t, dir, "abs.tsvt", "=output(1)\n")
+	ld := loader.FS(loader.Dir(t.TempDir())) // an unrelated root
+
+	_, resolved, err := ld("main.tsvt", sheet.Path(abs))
+	require.NoError(t, err)
+	assert.Equal(t, sheet.Path(abs), resolved)
 }
 
 func TestFS_MissingFile(t *testing.T) {
 	t.Parallel()
 
 	ld := loader.FS(loader.Dir(t.TempDir()))
-
 	_, _, err := ld("main.tsvt", "absent.tsvt")
-	require.Error(t, err)
-}
-
-func TestFS_ReadAllErrorOnDirectory(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(dir, "nested"), 0o750))
-	ld := loader.FS(loader.Dir(dir))
-
-	_, _, err := ld("main.tsvt", "nested") // opens, but reading a directory fails
 	require.Error(t, err)
 }
 

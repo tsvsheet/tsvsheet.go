@@ -58,6 +58,9 @@ type TsvsheetParserVisitor interface {
 	// Visit a parse tree produced by TsvsheetParser#reference.
 	VisitReference(ctx *ReferenceContext) interface{}
 
+	// Visit a parse tree produced by TsvsheetParser#sheetQualifier.
+	VisitSheetQualifier(ctx *SheetQualifierContext) interface{}
+
 	// Visit a parse tree produced by TsvsheetParser#cellRef.
 	VisitCellRef(ctx *CellRefContext) interface{}
 }
