@@ -131,3 +131,46 @@ func TestEmbed_CheckAcceptsBuiltins(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, sheet.Check(s))
 }
+
+func TestEmbeddedGrid_ReturnsSubSheet(t *testing.T) {
+	t.Parallel()
+
+	// The embed cell's sub-sheet computes with the passed argument; its whole
+	// grid is returned for nested rendering.
+	s, err := sheet.Parse([]byte("=sheet(\"child\", 5)\n"))
+	require.NoError(t, err)
+	path, grid, ok := s.EmbeddedGrid(addr(0, 0), sheet.ComputeOptions{
+		Loader: memLoader(map[string]string{"child": "=input(1)\t=output(A1 * 2)\n"}),
+		Base:   "root",
+	})
+	require.True(t, ok)
+	assert.Equal(t, sheet.Path("child"), path)
+	assert.Equal(t, "5", grid[0][0])  // A1 = INPUT(1)
+	assert.Equal(t, "10", grid[0][1]) // B1 = OUTPUT(A1*2)
+}
+
+func TestEmbeddedGrid_NotAnEmbed(t *testing.T) {
+	t.Parallel()
+
+	s, err := sheet.Parse([]byte("hi\t=A1\n"))
+	require.NoError(t, err)
+
+	_, _, litOK := s.EmbeddedGrid(addr(0, 0), sheet.ComputeOptions{})
+	assert.False(t, litOK) // a literal
+	_, _, refOK := s.EmbeddedGrid(addr(0, 1), sheet.ComputeOptions{})
+	assert.False(t, refOK) // a formula, but not a SHEET call
+	_, _, offOK := s.EmbeddedGrid(addr(9, 9), sheet.ComputeOptions{})
+	assert.False(t, offOK) // off the grid
+}
+
+func TestEmbeddedGrid_UnresolvedIsNotOK(t *testing.T) {
+	t.Parallel()
+
+	s, err := sheet.Parse([]byte("=sheet(\"missing\")\n"))
+	require.NoError(t, err)
+	_, _, ok := s.EmbeddedGrid(addr(0, 0), sheet.ComputeOptions{
+		Loader: memLoader(map[string]string{}),
+		Base:   "root",
+	})
+	assert.False(t, ok)
+}

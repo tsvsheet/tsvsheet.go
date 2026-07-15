@@ -96,24 +96,68 @@ func (r resolver) evalInput(args []tsvt.Expr) Value {
 // sheet without a single OUTPUT cell is #REF!; a sheet already on the embedding
 // stack is #CIRC!.
 func (r resolver) evalSheet(args []tsvt.Expr) Value {
+	sub, path, inputs, bad, ok := r.sheetTarget(args)
+	if !ok {
+		return bad
+	}
+	return r.embed(sub, path, inputs)
+}
+
+// sheetTarget resolves a SHEET(path, args…) call to its sub-sheet, resolved
+// path, and evaluated argument values. ok is false on any failure, and bad
+// carries the error value to surface (#VALUE! arity, a propagated path error,
+// #REF! for a missing loader/unresolved path, or #CIRC! for a cycle).
+func (r resolver) sheetTarget(args []tsvt.Expr) (Sheet, Path, []Value, Value, boolResult) {
 	if len(args) < 1 {
-		return errorValue(ErrValue)
+		return Sheet{}, "", nil, errorValue(ErrValue), false
 	}
 	pathVal := r.eval(args[0])
 	if pathVal.isError() {
-		return pathVal
+		return Sheet{}, "", nil, pathVal, false
 	}
 	if r.comp.env.loader == nil {
-		return errorValue(ErrRef)
+		return Sheet{}, "", nil, errorValue(ErrRef), false
 	}
 	sub, resolved, err := r.comp.env.loader(r.comp.env.base, Path(pathVal.String()))
 	if err != nil {
-		return errorValue(ErrRef)
+		return Sheet{}, "", nil, errorValue(ErrRef), false
 	}
 	if r.comp.env.visiting[resolved] {
-		return errorValue(ErrCirc)
+		return Sheet{}, "", nil, errorValue(ErrCirc), false
 	}
-	return r.embed(sub, resolved, r.argValues(args[1:]))
+	return sub, resolved, r.argValues(args[1:]), Value{}, true
+}
+
+// EmbeddedGrid resolves the sub-sheet embedded by a SHEET(...) cell and returns
+// its resolved path and its own computed grid — the projection a frontend
+// renders as a nested sheet inside the cell. ok is false when the cell is not a
+// top-level SHEET call or the reference cannot be resolved.
+func (s Sheet) EmbeddedGrid(at Address, opts ComputeOptions) (Path, Grid, bool) {
+	cl, inGrid := s.at(rowIndex(at.Row), colIndex(at.Col))
+	if !inGrid || !cl.isFormula() {
+		return "", nil, false
+	}
+	call, isCall := topLevelSheetCall(cl.formula)
+	if !isCall {
+		return "", nil, false
+	}
+	visiting := map[Path]boolResult{opts.Base: true}
+	root := resolver{
+		comp: newEmbedComputer(s, opts.At, embedEnv{loader: opts.Loader, base: opts.Base, visiting: visiting}),
+	}
+	sub, path, inputs, _, ok := root.sheetTarget(call.Args)
+	if !ok {
+		return "", nil, false
+	}
+	child := embedEnv{loader: opts.Loader, base: path, args: inputs, visiting: withPath(visiting, path)}
+	return path, sub.computeGrid(newEmbedComputer(sub, opts.At, child)), true
+}
+
+// topLevelSheetCall reports whether a formula is a bare SHEET(...) call and
+// returns it.
+func topLevelSheetCall(expr tsvt.Expr) (tsvt.Call, boolResult) {
+	call, ok := expr.(tsvt.Call)
+	return call, boolResult(ok && strings.EqualFold(call.Name, "sheet"))
 }
 
 // embed computes sub as a child sheet (carrying inputs for its INPUT calls and

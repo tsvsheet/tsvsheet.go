@@ -53,6 +53,26 @@ func TestNewEmbeddable_ResolvesSheetOutput(t *testing.T) {
 	assert.Equal(t, "7", s.Snapshot().Computed[0][0])
 }
 
+func TestEmbedded_ReturnsSubSheetOrNotOK(t *testing.T) {
+	t.Parallel()
+
+	loader := func(_, ref sheet.Path) (sheet.Sheet, sheet.Path, error) {
+		s, err := sheet.Parse([]byte("=output(9)\n"))
+		return s, ref, err
+	}
+	s, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root")
+	require.NoError(t, err)
+
+	path, grid, ok := s.Embedded(sheet.Address{Row: 0, Col: 0})
+	require.True(t, ok)
+	assert.Equal(t, sheet.Path("c"), path)
+	assert.Equal(t, "9", grid[0][0])
+
+	// A non-embed session returns ok=false.
+	_, _, ok = newSession(t).Embedded(sheet.Address{Row: 0, Col: 0})
+	assert.False(t, ok)
+}
+
 func TestInsertRow_GrowsAndDirties(t *testing.T) {
 	t.Parallel()
 

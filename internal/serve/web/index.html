@@ -20,6 +20,8 @@
     --precedent-bg: #e4eef6;
     --dependent: #3f8f5b;
     --dependent-bg: #e6f2ea;
+    --embed: #6a4b9c;
+    --embed-bg: #efe9f6;
     --dirty: #c98a1a;
     --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
   }
@@ -29,6 +31,7 @@
       --head: #7d8b98; --head-bg: #1a1f26; --formula: #221d12; --formula-mark: #d7a24a;
       --err: #ff6b5e; --err-bg: #2a1613; --accent: #5aa0d6; --dirty: #d7a24a;
       --precedent-bg: #14202b; --dependent: #5cae79; --dependent-bg: #16241b;
+      --embed: #b394e0; --embed-bg: #1e1729;
     }
   }
   * { box-sizing: border-box; }
@@ -83,6 +86,14 @@
   td.cell { cursor: cell; }
   td.cell:hover { outline: 1px solid var(--accent); outline-offset: -1px; }
   td.formula { background: var(--formula); border-left: 2px solid var(--formula-mark); }
+  td.embed { background: var(--embed-bg); border-left: 2px solid var(--embed); }
+  td.embed::after { content: " ⧉"; color: var(--embed); font-size: 10px; }
+  .embedpanel { display: none; border-top: 1px solid var(--rule-strong); padding: 0.5rem 1rem 0.8rem; max-height: 40%; overflow: auto; }
+  .embedpanel.on { display: block; }
+  .embedpanel .title { color: var(--embed); font-size: 12px; font-weight: 600; margin-bottom: 0.4rem; }
+  .embedpanel .title .path { color: var(--head); font-weight: 400; }
+  .embedpanel table td { border-color: var(--rule); }
+  .embedpanel .out { background: var(--dependent-bg); box-shadow: inset 0 0 0 2px var(--dependent); }
   td.err { background: var(--err-bg); color: var(--err); }
   td.selected { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; }
   td.precedent { background: var(--precedent-bg); box-shadow: inset 0 0 0 2px var(--accent); }
@@ -125,6 +136,7 @@
   <input id="formula" type="text" spellcheck="false" placeholder="select a cell" aria-label="Cell source">
 </div>
 <main aria-label="Spreadsheet"><div id="grid"></div></main>
+<div id="embedpanel" class="embedpanel" aria-live="polite"></div>
 <div id="diagnostics" class="diagnostics" aria-live="polite"></div>
 <script>
 (() => {
@@ -137,7 +149,9 @@
     state: document.getElementById("state"),
     save: document.getElementById("save"),
     reflegend: document.getElementById("reflegend"),
+    embedpanel: document.getElementById("embedpanel"),
   };
+  const EMBED = /^=\s*sheet\s*\(/i;
   let sheet = { computed: [], source: [] };
   let sel = { row: 0, col: 0 };
 
@@ -174,6 +188,7 @@
     }
     renderSelection();
     highlightReferences(sel.row, sel.col);
+    showEmbedded(sel.row, sel.col);
     renderDiagnostics(state.diagnostics);
     els.state.textContent = state.dirty ? "unsaved changes" : "saved";
     els.state.classList.toggle("dirty", state.dirty);
@@ -214,6 +229,7 @@
     td.textContent = value;
     td.className = "cell";
     if (src.startsWith("=")) td.classList.add("formula");
+    if (EMBED.test(src)) td.classList.add("embed");
     if (ERR.test(value)) td.classList.add("err");
     td.dataset.row = r;
     td.dataset.col = c;
@@ -227,6 +243,33 @@
     renderSelection();
     els.formula.value = at(sheet.source, r, c);
     highlightReferences(r, c);
+    showEmbedded(r, c);
+  }
+
+  // showEmbedded renders the nested sub-sheet of a =sheet(...) cell in a panel,
+  // marking that sub-sheet's OUTPUT cell; a non-embed cell hides the panel.
+  async function showEmbedded(r, c) {
+    if (!EMBED.test(at(sheet.source, r, c))) { els.embedpanel.classList.remove("on"); return; }
+    let emb;
+    try { emb = await api("GET", `/api/embedded?cell=${a1(r, c)}`); }
+    catch { els.embedpanel.classList.remove("on"); return; }
+    const title = document.createElement("div");
+    title.className = "title";
+    title.innerHTML = `⧉ embedded sheet <span class="path"></span>`;
+    title.querySelector(".path").textContent = emb.path;
+    const table = document.createElement("table");
+    (emb.grid || []).forEach((row) => {
+      const tr = document.createElement("tr");
+      (row || []).forEach((v) => {
+        const td = document.createElement("td");
+        td.textContent = v;
+        if (ERR.test(v)) td.classList.add("err");
+        tr.append(td);
+      });
+      table.append(tr);
+    });
+    els.embedpanel.replaceChildren(title, table);
+    els.embedpanel.classList.add("on");
   }
 
   function renderSelection() {

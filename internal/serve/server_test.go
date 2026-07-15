@@ -218,6 +218,46 @@ func TestStructure_BadBody(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestEmbedded_OK(t *testing.T) {
+	t.Parallel()
+
+	loader := func(_, ref sheet.Path) (sheet.Sheet, sheet.Path, error) {
+		s, err := sheet.Parse([]byte("=output(9)\n"))
+		return s, ref, err
+	}
+	sess, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root")
+	require.NoError(t, err)
+	srv := serve.NewServer(sess, func() error { return nil })
+
+	rec := do(t, srv, http.MethodGet, "/api/embedded?cell=A1", "")
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Path string     `json:"path"`
+		Grid [][]string `json:"grid"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "c", resp.Path)
+	assert.Equal(t, "9", resp.Grid[0][0])
+}
+
+func TestEmbedded_NotAnEmbedIs404(t *testing.T) {
+	t.Parallel()
+
+	// D2 in sampleSheet is a formula, but not a SHEET call.
+	srv, _ := testServer(t)
+	rec := do(t, srv, http.MethodGet, "/api/embedded?cell=D2", "")
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestEmbedded_BadCell(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := testServer(t)
+	rec := do(t, srv, http.MethodGet, "/api/embedded?cell=bogus", "")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestUI_ServesHTML(t *testing.T) {
 	t.Parallel()
 

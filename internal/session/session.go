@@ -138,6 +138,16 @@ func (s *Session) References(addr sheet.Address) ([]sheet.Span, []sheet.Address)
 	return s.sheet.Precedents(addr), s.sheet.Dependents(addr)
 }
 
+// Embedded returns the sub-sheet a SHEET(...) cell embeds: its resolved path and
+// its own computed grid, for nested rendering. ok is false when the cell is not
+// a SHEET call or the reference cannot be resolved.
+func (s *Session) Embedded(at sheet.Address) (sheet.Path, sheet.Grid, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	path, grid, ok := s.sheet.EmbeddedGrid(at, sheet.ComputeOptions{At: time.Now(), Loader: s.loader, Base: s.base})
+	return path, grid, ok
+}
+
 // MarkSaved clears the dirty flag after a frontend persists the spreadsheet.
 func (s *Session) MarkSaved() {
 	s.mu.Lock()

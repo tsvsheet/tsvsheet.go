@@ -38,6 +38,7 @@ func (srv Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/explain", srv.handleExplain)
 	mux.HandleFunc("GET /api/references", srv.handleReferences)
 	mux.HandleFunc("POST /api/structure", srv.handleStructure)
+	mux.HandleFunc("GET /api/embedded", srv.handleEmbedded)
 	mux.Handle("GET /", uiHandler())
 	return mux
 }
@@ -168,6 +169,29 @@ func (srv Server) handleReferences(w http.ResponseWriter, r *http.Request) {
 	}
 	precedents, dependents := srv.session.References(at)
 	writeJSON(w, http.StatusOK, referencesResponse{Precedents: precedents, Dependents: dependents})
+}
+
+// embeddedResponse is the GET /api/embedded body: the sub-sheet a SHEET(...)
+// cell embeds — its resolved path and its own computed grid.
+type embeddedResponse struct {
+	Path string     `json:"path"`
+	Grid sheet.Grid `json:"grid"`
+}
+
+// handleEmbedded returns the nested sub-sheet embedded by the cell named in the
+// `cell` query parameter, or 404 when that cell is not a resolvable SHEET call.
+func (srv Server) handleEmbedded(w http.ResponseWriter, r *http.Request) {
+	at, err := sheet.ParseAddress(sheet.AddressText(r.URL.Query().Get("cell")))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	path, grid, ok := srv.session.Embedded(at)
+	if !ok {
+		writeError(w, http.StatusNotFound, constants.ErrNotFound.With(nil, "cell", at.String()))
+		return
+	}
+	writeJSON(w, http.StatusOK, embeddedResponse{Path: string(path), Grid: grid})
 }
 
 // decode reads a JSON request body into v, writing a 400 and returning false on
