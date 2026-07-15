@@ -20,6 +20,7 @@ tsvsheet render examples/invoice.tsvt | column -t
 | [math](math.tsvt) | Error-value propagation: dividing by a zero denominator yields `#DIV/0!`, which flows through any expression that reads the cell. |
 | [squares](squares.tsvt) | The power operator (`=A2^2`, `=A2^3`) building square and cube columns, over a `Total` row that sums each column across a range (`=sum(B2:B6)`). |
 | [weather](weather.tsvt) | Per-row differences (`Range = High − Low`, `=B2-C2`) and a `Peak` summary row reducing a column with `max`/`min` (`=max(B2:B6)`, `=min(C2:C6)`). |
+| [functions](functions.tsvt) | A reference sheet demonstrating every built-in function with a worked formula and computed result — math and trig, aggregate and statistics, text, logical and info, date and time, lookup, financial, and a dynamic-array showcase whose results spill down their columns. |
 | [order](order.tsvt) → [discount](discount.tsvt) | **Embedded sheets** — each `Line total` embeds the whole [discount](discount.tsvt) sheet as a function: `=sheet("discount.tsvt", C2, B2)` passes the unit price and quantity, and the cell's value is that sub-sheet's `=output(…)`. |
 
 ## Embedded sheets — a spreadsheet as a function
