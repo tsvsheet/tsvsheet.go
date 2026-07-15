@@ -45,7 +45,7 @@ func unknownFunctions(expr tsvt.Expr, at Address) []Diagnostic {
 // registry function, a lazy conditional, or a value predicate.
 func isKnownFunc(name funcName) boolResult {
 	lower := funcName(strings.ToLower(string(name)))
-	if isConditional(lower) {
+	if isConditional(lower) || lower == "today" || lower == "now" {
 		return true
 	}
 	if _, ok := inspectors[string(lower)]; ok {

@@ -33,6 +33,7 @@ const (
 	kindNumber
 	kindString
 	kindBool
+	kindDate
 	kindError
 )
 
@@ -60,6 +61,10 @@ func boolValue(isTrue boolResult) Value {
 	}
 	return Value{kind: kindBool, num: 0}
 }
+
+// dateValue wraps a date/time serial number; it renders as an ISO date and
+// coerces to its serial in arithmetic.
+func dateValue(serial floatVal) Value { return Value{kind: kindDate, num: float64(serial)} }
 
 // errorValue wraps an error value.
 func errorValue(e ErrorValue) Value { return Value{kind: kindError, str: string(e)} }
@@ -104,6 +109,8 @@ func (v Value) String() string {
 			return "TRUE"
 		}
 		return "FALSE"
+	case kindDate:
+		return renderSerial(floatVal(v.num))
 	case kindString, kindError:
 		return v.str
 	default:
@@ -119,7 +126,7 @@ func (v Value) asNumber() (float64, Value) {
 	switch v.kind {
 	case kindEmpty:
 		return 0, emptyValue()
-	case kindNumber, kindBool:
+	case kindNumber, kindBool, kindDate:
 		return v.num, v
 	case kindError:
 		return 0, v
@@ -135,7 +142,7 @@ func (v Value) truthy() (bool, Value) {
 	switch v.kind {
 	case kindError:
 		return false, v
-	case kindNumber, kindBool:
+	case kindNumber, kindBool, kindDate:
 		return v.num != 0, v
 	case kindString:
 		return v.str != "", v

@@ -1,6 +1,8 @@
 package sheet
 
 import (
+	"time"
+
 	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/tsvt"
 )
@@ -27,7 +29,7 @@ func Explain(s Sheet, at Address) (Trace, error) {
 	if !inGrid {
 		return Trace{}, constants.ErrNotFound.With(nil, "cell", at.String())
 	}
-	comp := newComputer(s)
+	comp := newComputer(s, time.Now())
 	trace := Trace{Cell: at.String(), Value: comp.read(rowIndex(at.Row), colIndex(at.Col)).String()}
 	if cl.isFormula() {
 		trace.Formula = RenderExpr(cl.formula)

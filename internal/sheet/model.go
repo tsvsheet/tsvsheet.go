@@ -10,6 +10,7 @@ package sheet
 import (
 	"bytes"
 	"strings"
+	"time"
 
 	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/tsvt"
@@ -77,10 +78,15 @@ func parseCell(text textVal, row rowIndex, col colIndex) (cell, error) {
 }
 
 // Compute evaluates every formula in dependency order and returns the value
-// grid: literal cells pass through verbatim, formula cells are replaced by
-// their computed value.
-func (s Sheet) Compute() Grid {
-	comp := newComputer(s)
+// grid: literal cells pass through verbatim, formula cells are replaced by their
+// computed value. Volatile functions (TODAY/NOW) sample the wall clock once for
+// the whole pass.
+func (s Sheet) Compute() Grid { return s.ComputeAt(time.Now()) }
+
+// ComputeAt is Compute with the clock injected, so volatile functions are
+// deterministic within a pass (and testable).
+func (s Sheet) ComputeAt(at time.Time) Grid {
+	comp := newComputer(s, at)
 	out := make(Grid, len(s.cells))
 	for r, row := range s.cells {
 		out[r] = make([]string, len(row))

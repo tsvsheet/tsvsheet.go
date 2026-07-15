@@ -29,7 +29,9 @@ func compare(op tsvt.BinaryOp, left, right Value) Value {
 
 // numericish reports whether a value participates in numeric comparison — a
 // number or a boolean (whose 1/0 lives in the number field).
-func numericish(v Value) bool { return v.kind == kindNumber || v.kind == kindBool }
+func numericish(v Value) bool {
+	return v.kind == kindNumber || v.kind == kindBool || v.kind == kindDate
+}
 
 // bothText reports whether both operands compare as text (string or empty).
 func bothText(left, right Value) bool {
@@ -100,7 +102,32 @@ func (r resolver) evalLazy(name funcName, args []tsvt.Expr) (Value, boolResult) 
 	if v, ok := r.evalConditional(name, args); ok {
 		return v, true
 	}
+	if v, ok := r.evalClock(name, args); ok {
+		return v, true
+	}
 	return r.evalInspector(name, args)
+}
+
+// evalClock dispatches the volatile clock builtins TODAY and NOW, which read the
+// pass clock; ok is false for any other name. A non-empty argument list is
+// #VALUE!.
+func (r resolver) evalClock(name funcName, args []tsvt.Expr) (Value, boolResult) {
+	switch name {
+	case "today":
+		return clockResult(argCount(len(args)), dateValue(daySerial(r.comp.now))), true
+	case "now":
+		return clockResult(argCount(len(args)), dateValue(datetimeSerial(r.comp.now))), true
+	default:
+		return Value{}, false
+	}
+}
+
+// clockResult returns v for a no-argument call, else #VALUE!.
+func clockResult(argc argCount, v Value) Value {
+	if argc != 0 {
+		return errorValue(ErrValue)
+	}
+	return v
 }
 
 // evalConditional handles the selectively-lazy conditionals, which evaluate
@@ -304,4 +331,18 @@ var functions = map[string]function{
 	"regexmatch":   {impl: fnRegexMatch, minArgs: 2, maxArgs: 2},
 	"regexextract": {impl: fnRegexExtract, minArgs: 2, maxArgs: 2},
 	"regexreplace": {impl: fnRegexReplace, minArgs: 3, maxArgs: 3},
+
+	// Phase 4 — date & time (TODAY/NOW dispatch via the clock path).
+	"year":      {impl: fnYear, minArgs: 1, maxArgs: 1},
+	"month":     {impl: fnMonth, minArgs: 1, maxArgs: 1},
+	"day":       {impl: fnDay, minArgs: 1, maxArgs: 1},
+	"hour":      {impl: fnHour, minArgs: 1, maxArgs: 1},
+	"minute":    {impl: fnMinute, minArgs: 1, maxArgs: 1},
+	"second":    {impl: fnSecond, minArgs: 1, maxArgs: 1},
+	"weekday":   {impl: fnWeekday, minArgs: 1, maxArgs: 2},
+	"date":      {impl: fnDate, minArgs: 3, maxArgs: 3},
+	"edate":     {impl: fnEdate, minArgs: 2, maxArgs: 2},
+	"eomonth":   {impl: fnEomonth, minArgs: 2, maxArgs: 2},
+	"days":      {impl: fnDays, minArgs: 2, maxArgs: 2},
+	"datevalue": {impl: fnDatevalue, minArgs: 1, maxArgs: 1},
 }

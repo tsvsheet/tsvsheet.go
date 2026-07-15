@@ -1,6 +1,10 @@
 package sheet
 
-import "github.com/uplang/tsvsheet.go/internal/tsvt"
+import (
+	"time"
+
+	"github.com/uplang/tsvsheet.go/internal/tsvt"
+)
 
 // cellPhase tracks a cell's evaluation state for memoization and cycle
 // detection.
@@ -15,22 +19,24 @@ const (
 // computer memoizes cell values as they are evaluated in dependency order. Its
 // cache and phase slices are allocated once and shared, so value-receiver
 // methods mutate them in place (no reassignment) and every recursive read sees
-// the same state.
+// the same state. now is the wall clock sampled once for the pass (volatile
+// functions).
 type computer struct {
+	now   time.Time
 	sheet Sheet
 	cache [][]Value
 	phase [][]cellPhase
 }
 
-// newComputer builds a computer sized to the sheet.
-func newComputer(s Sheet) computer {
+// newComputer builds a computer sized to the sheet, with the pass clock.
+func newComputer(s Sheet, now time.Time) computer {
 	cache := make([][]Value, len(s.cells))
 	phase := make([][]cellPhase, len(s.cells))
 	for r, row := range s.cells {
 		cache[r] = make([]Value, len(row))
 		phase[r] = make([]cellPhase, len(row))
 	}
-	return computer{sheet: s, cache: cache, phase: phase}
+	return computer{now: now, sheet: s, cache: cache, phase: phase}
 }
 
 // output is a cell's rendered value: a literal verbatim, a formula computed.
