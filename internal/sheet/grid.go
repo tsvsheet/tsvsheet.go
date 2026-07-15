@@ -24,15 +24,25 @@ const (
 type Grid [][]string
 
 // ReadTSV reads a tab-separated value grid. Rows are newline-separated; a
-// trailing newline does not add an empty row. A read failure surfaces as
-// constants.ErrReadInput.
+// trailing newline does not add an empty row. Full-line comments are skipped
+// and do not occupy a grid row: a leading `#!` on the first line (a shebang, so
+// a .tsvt can be `chmod +x` and run via `#!/usr/bin/env tsvsheet`) and any line
+// beginning with `# ` (hash-space). An error-value cell like `#N/A` (hash then a
+// non-space) is data, not a comment. A read failure surfaces as ErrReadInput.
 func ReadTSV(r io.Reader) (Grid, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), maxLineBytes)
 
 	grid := Grid{}
+	lineNum := 0
 	for scanner.Scan() {
-		grid = append(grid, strings.Split(scanner.Text(), tab))
+		lineNum++
+		text := scanner.Text()
+		isShebang := lineNum == 1 && strings.HasPrefix(text, "#!")
+		if isShebang || strings.HasPrefix(text, "# ") {
+			continue
+		}
+		grid = append(grid, strings.Split(text, tab))
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, constants.ErrReadInput.With(err)

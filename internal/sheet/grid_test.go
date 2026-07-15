@@ -20,6 +20,31 @@ func TestReadTSV(t *testing.T) {
 	assert.Equal(t, sheet.Grid{{"a", "b"}, {"1", "2"}}, g)
 }
 
+func TestReadTSV_SkipsComments(t *testing.T) {
+	t.Parallel()
+
+	// A first-line shebang and any `# ` line are skipped and do not occupy a
+	// row; a `#N/A` cell (hash then a non-space) stays data.
+	g, err := sheet.ReadTSV(strings.NewReader(
+		"#!/usr/bin/env tsvsheet\n# a note\na\tb\n# mid\n#N/A\t=A2\n",
+	))
+	require.NoError(t, err)
+	assert.Equal(t, sheet.Grid{{"a", "b"}, {"#N/A", "=A2"}}, g)
+}
+
+func TestReadTSV_CommentOrDataOnFirstLine(t *testing.T) {
+	t.Parallel()
+
+	// A `# ` comment on the first line is skipped; a data first line is kept.
+	comment, err := sheet.ReadTSV(strings.NewReader("# header\nx\ty\n"))
+	require.NoError(t, err)
+	assert.Equal(t, sheet.Grid{{"x", "y"}}, comment)
+
+	data, err := sheet.ReadTSV(strings.NewReader("x\ty\n"))
+	require.NoError(t, err)
+	assert.Equal(t, sheet.Grid{{"x", "y"}}, data)
+}
+
 func TestReadTSV_Ragged(t *testing.T) {
 	t.Parallel()
 

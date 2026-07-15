@@ -1,0 +1,7 @@
+#!/usr/bin/env tsvsheet
+# Celsius -> Fahrenheit. Make executable (chmod +x) and run: ./celsius.tsvt
+Celsius	Fahrenheit
+0	=A2*9/5+32
+20	=A3*9/5+32
+37	=A4*9/5+32
+100	=A5*9/5+32

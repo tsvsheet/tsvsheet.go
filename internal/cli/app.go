@@ -40,12 +40,13 @@ const (
 
 // command names.
 const (
-	cmdRender  = "render"
-	cmdParse   = "parse"
-	cmdCheck   = "check"
-	cmdExplain = "explain"
-	cmdServe   = "serve"
-	cmdTUI     = "tui"
+	cmdRender   = "render"
+	cmdParse    = "parse"
+	cmdFromJSON = "from-json"
+	cmdCheck    = "check"
+	cmdExplain  = "explain"
+	cmdServe    = "serve"
+	cmdTUI      = "tui"
 )
 
 // argSheetOptional is the ArgsUsage for commands whose sheet argument may be
@@ -69,11 +70,13 @@ func Command(v Version) *cli.Command {
 		Description:           description,
 		Version:               string(v),
 		EnableShellCompletion: true,
+		DefaultCommand:        cmdRender,
 		Before:                configureLogger,
 		Flags:                 loggerFlags(),
 		Commands: []*cli.Command{
 			renderCommand(),
 			parseCommand(),
+			fromJSONCommand(),
 			checkCommand(),
 			explainCommand(),
 			serveCommand(),

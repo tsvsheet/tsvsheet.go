@@ -43,12 +43,21 @@ func TestCommand_HasAllCommands(t *testing.T) {
 	for i, c := range cmd.Commands {
 		names[i] = c.Name
 	}
-	assert.ElementsMatch(t, []string{cmdRender, cmdParse, cmdCheck, cmdExplain, cmdServe, cmdTUI}, names)
+	assert.ElementsMatch(t, []string{cmdRender, cmdParse, cmdFromJSON, cmdCheck, cmdExplain, cmdServe, cmdTUI}, names)
 }
 
 func TestCLI_Render(t *testing.T) {
 	path := writeTemp(t, "s.tsvt", sampleSheet)
 	out, err := runCLI(t, "render", path)
+	require.NoError(t, err)
+	assert.Contains(t, out, "\t5\n")
+}
+
+func TestCLI_DefaultCommandRenders(t *testing.T) {
+	// No subcommand → the default command renders (so a shebang'd .tsvt run as
+	// `tsvsheet file.tsvt` computes it).
+	path := writeTemp(t, "s.tsvt", sampleSheet)
+	out, err := runCLI(t, path)
 	require.NoError(t, err)
 	assert.Contains(t, out, "\t5\n")
 }
@@ -64,15 +73,27 @@ func TestCLI_Parse(t *testing.T) {
 	withStdin(t, sampleSheet)
 	out, err := runCLI(t, "parse")
 	require.NoError(t, err)
-	assert.Contains(t, out, `"formula": true`)
-	assert.NotContains(t, out, `"value"`) // no computed value without the flag
+	assert.Contains(t, out, `"rows"`)
+	assert.Contains(t, out, `=A1+B1`)      // source grid carries the formula
+	assert.NotContains(t, out, `"values"`) // computed grid omitted without the flag
 }
 
 func TestCLI_ParseWithValue(t *testing.T) {
 	withStdin(t, sampleSheet)
 	out, err := runCLI(t, "parse", "--value")
 	require.NoError(t, err)
-	assert.Contains(t, out, `"value": "5"`) // D2 = B2+C2 = 5, included by --value
+	assert.Contains(t, out, `"values"`)
+	assert.Contains(t, out, `"5"`) // C1 = A1+B1 = 5, in the computed grid
+}
+
+func TestCLI_ParseRoundTripsThroughFromJSON(t *testing.T) {
+	// parse → from-json reconstructs the original source.
+	json, err := runCLI(t, "parse", writeTemp(t, "s.tsvt", sampleSheet))
+	require.NoError(t, err)
+	withStdin(t, json)
+	back, err := runCLI(t, "from-json")
+	require.NoError(t, err)
+	assert.Equal(t, sampleSheet, back)
 }
 
 func TestCLI_CheckClean(t *testing.T) {
