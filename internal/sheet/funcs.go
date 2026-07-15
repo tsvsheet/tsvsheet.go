@@ -105,6 +105,9 @@ func (r resolver) evalLazy(name funcName, args []tsvt.Expr) (Value, boolResult) 
 	if v, ok := r.evalClock(name, args); ok {
 		return v, true
 	}
+	if v, ok := r.evalTable(name, args); ok {
+		return v, true
+	}
 	return r.evalInspector(name, args)
 }
 
@@ -345,4 +348,8 @@ var functions = map[string]function{
 	"eomonth":   {impl: fnEomonth, minArgs: 2, maxArgs: 2},
 	"days":      {impl: fnDays, minArgs: 2, maxArgs: 2},
 	"datevalue": {impl: fnDatevalue, minArgs: 1, maxArgs: 1},
+
+	// Phase 5 — lookup (VLOOKUP/HLOOKUP/INDEX/MATCH/ROWS/COLUMNS dispatch via
+	// the table path, which keeps a range's 2-D shape).
+	"choose": {impl: fnChoose, minArgs: 2, maxArgs: -1},
 }

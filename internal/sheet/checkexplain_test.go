@@ -44,9 +44,9 @@ func TestCheck_NumberFormulaHasNoRefs(t *testing.T) {
 func TestCheck_KnownFunctionsClean(t *testing.T) {
 	t.Parallel()
 
-	// A lazy conditional (`if`), an inspector (`isnumber`), and a registered
-	// eager function (`sum`) are all known, so no diagnostics arise.
-	assert.Empty(t, sheet.Check(parse(t, "1\t2\t=if(isnumber(A1), sum(A1:B1), 0)\n")))
+	// A conditional (`if`), an inspector (`isnumber`), a table function
+	// (`index`), and an eager function (`sum`) are all known — no diagnostics.
+	assert.Empty(t, sheet.Check(parse(t, "1\t2\t=if(isnumber(A1), sum(A1:B1), index(A1:B1, 1, 1))\n")))
 }
 
 func TestCheck_WalksIntoUnaryPercentBinaryAndCall(t *testing.T) {

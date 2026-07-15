@@ -156,3 +156,37 @@ func ordered(x, y gridPos) (gridPos, gridPos) {
 	}
 	return y, x
 }
+
+// argMatrix resolves an argument to a 2-D block of values: a range keeps its
+// rows×columns shape (for lookups), any other expression is a 1×1 block.
+func (r resolver) argMatrix(arg tsvt.Expr) [][]Value {
+	if ref, ok := arg.(tsvt.RefOperand); ok {
+		return r.rangeMatrix(ref.Ref)
+	}
+	return [][]Value{{r.eval(arg)}}
+}
+
+// rangeMatrix resolves an A1 reference to its rows×columns of values; an
+// off-grid endpoint yields a 1×1 #REF! block.
+func (r resolver) rangeMatrix(ref tsvt.Reference) [][]Value {
+	rangeRef := ref.(tsvt.RangeRef)
+	from, fromOK := a1Address(rangeRef.From)
+	to, toOK := from, fromOK
+	if rangeRef.To != nil {
+		to, toOK = a1Address(*rangeRef.To)
+	}
+	if !fromOK || !toOK {
+		return [][]Value{{errorValue(ErrRef)}}
+	}
+	r0, r1 := ordered(gridPos(from.Row), gridPos(to.Row))
+	c0, c1 := ordered(gridPos(from.Col), gridPos(to.Col))
+	rows := make([][]Value, 0, r1-r0+1)
+	for row := r0; row <= r1; row++ {
+		cols := make([]Value, 0, c1-c0+1)
+		for col := c0; col <= c1; col++ {
+			cols = append(cols, r.comp.read(rowIndex(row), colIndex(col)))
+		}
+		rows = append(rows, cols)
+	}
+	return rows
+}
