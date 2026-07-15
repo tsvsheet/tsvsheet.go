@@ -108,6 +108,9 @@ func (r resolver) evalLazy(name funcName, args []tsvt.Expr) (Value, boolResult) 
 	if v, ok := r.evalTable(name, args); ok {
 		return v, true
 	}
+	if v, ok := r.evalCriteria(name, args); ok {
+		return v, true
+	}
 	return r.evalInspector(name, args)
 }
 
@@ -352,4 +355,18 @@ var functions = map[string]function{
 	// Phase 5 — lookup (VLOOKUP/HLOOKUP/INDEX/MATCH/ROWS/COLUMNS dispatch via
 	// the table path, which keeps a range's 2-D shape).
 	"choose": {impl: fnChoose, minArgs: 2, maxArgs: -1},
+
+	// Phase 6 — statistical (COUNTIF/SUMIF/AVERAGEIF dispatch via the criteria
+	// path).
+	"median":     {impl: fnMedian, minArgs: 1, maxArgs: -1},
+	"mode":       {impl: fnMode, minArgs: 1, maxArgs: -1},
+	"stdev":      {impl: fnStdev, minArgs: 1, maxArgs: -1},
+	"stdevp":     {impl: fnStdevp, minArgs: 1, maxArgs: -1},
+	"var":        {impl: fnVar, minArgs: 1, maxArgs: -1},
+	"varp":       {impl: fnVarp, minArgs: 1, maxArgs: -1},
+	"geomean":    {impl: fnGeomean, minArgs: 1, maxArgs: -1},
+	"large":      {impl: fnLarge, minArgs: 2, maxArgs: -1},
+	"small":      {impl: fnSmall, minArgs: 2, maxArgs: -1},
+	"counta":     {impl: fnCount, minArgs: 1, maxArgs: -1},
+	"countblank": {impl: fnCountblank, minArgs: 1, maxArgs: -1},
 }
