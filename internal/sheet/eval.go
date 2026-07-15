@@ -8,15 +8,33 @@ func (r resolver) eval(expr tsvt.Expr) Value {
 	switch e := expr.(type) {
 	case tsvt.Number:
 		return value(textVal(e.Text))
+	case tsvt.StringLit:
+		return stringValue(textVal(e.Value))
+	case tsvt.BoolLit:
+		return boolValue(boolResult(e.IsTrue))
+	case tsvt.ErrorLit:
+		return errorValue(ErrorValue(e.Code))
 	case tsvt.RefOperand:
 		return r.resolveOperand(e.Ref).scalar()
 	case tsvt.Unary:
 		return r.evalUnary(e)
+	case tsvt.Percent:
+		return r.evalPercent(e)
 	case tsvt.Binary:
 		return r.evalBinary(e)
 	default: // tsvt.Call
 		return r.evalCall(expr.(tsvt.Call))
 	}
+}
+
+// evalPercent applies a postfix percent: `50%` is 0.5. A non-numeric operand is
+// #VALUE!; an error propagates.
+func (r resolver) evalPercent(e tsvt.Percent) Value {
+	n, v := r.eval(e.X).asNumber()
+	if v.isError() {
+		return v
+	}
+	return numberValue(floatVal(n / 100))
 }
 
 // evalUnary applies a unary sign; a non-numeric operand is #VALUE!, an error
@@ -33,7 +51,7 @@ func (r resolver) evalUnary(e tsvt.Unary) Value {
 }
 
 // evalBinary evaluates a binary operation, propagating an error operand before
-// dispatching arithmetic or comparison.
+// dispatching comparison, text concatenation, or arithmetic.
 func (r resolver) evalBinary(e tsvt.Binary) Value {
 	left := r.eval(e.Left)
 	if left.isError() {
@@ -43,10 +61,14 @@ func (r resolver) evalBinary(e tsvt.Binary) Value {
 	if right.isError() {
 		return right
 	}
-	if isComparison(e.Op) {
+	switch {
+	case isComparison(e.Op):
 		return compare(e.Op, left, right)
+	case e.Op == tsvt.OpCat:
+		return stringValue(textVal(left.String() + right.String()))
+	default:
+		return arithmetic(e.Op, left, right)
 	}
-	return arithmetic(e.Op, left, right)
 }
 
 // isComparison reports whether op is a §11 comparison operator (level 5).
@@ -73,8 +95,7 @@ func arithmetic(op tsvt.BinaryOp, left, right Value) Value {
 	return apply(op, floatVal(l), floatVal(r))
 }
 
-// apply computes a numeric binary result, guarding division/modulo by zero
-// (ADR 0003 rule 14).
+// apply computes a numeric binary result, guarding division by zero.
 func apply(op tsvt.BinaryOp, l, r floatVal) Value {
 	switch op {
 	case tsvt.OpMul:
@@ -83,18 +104,17 @@ func apply(op tsvt.BinaryOp, l, r floatVal) Value {
 		return numberValue(l + r)
 	case tsvt.OpSub:
 		return numberValue(l - r)
-	default: // OpDiv, OpMod
-		return divide(op, l, r)
+	case tsvt.OpPow:
+		return numberValue(power(l, r))
+	default: // OpDiv
+		return divide(l, r)
 	}
 }
 
-// divide applies division or modulo, yielding #DIV/0! on a zero divisor.
-func divide(op tsvt.BinaryOp, l, r floatVal) Value {
+// divide applies division, yielding #DIV/0! on a zero divisor.
+func divide(l, r floatVal) Value {
 	if r == 0 {
 		return errorValue(ErrDiv)
 	}
-	if op == tsvt.OpDiv {
-		return numberValue(l / r)
-	}
-	return numberValue(mod(l, r))
+	return numberValue(l / r)
 }

@@ -72,7 +72,6 @@ func TestCompute_Arithmetic(t *testing.T) {
 		"D1 - C1":        "1",
 		"C1 * D1":        "12",
 		"D1 / A1":        "2",
-		"D1 % C1":        "1",
 		"-A1":            "-2",
 		"+A1":            "2",
 		"C1 + D1 * A1":   "11", // precedence: 3 + (4*2)
@@ -139,6 +138,9 @@ func TestCompute_NonNumericIsValueError(t *testing.T) {
 		"=abs(A1)":      "#VALUE!",
 		"=round(A1)":    "#VALUE!",
 		"=round(2, A1)": "#VALUE!", // non-numeric place count
+		"=mod(A1, 2)":   "#VALUE!", // non-numeric dividend
+		"=mod(2, A1)":   "#VALUE!", // non-numeric divisor
+		"=A1%":          "#VALUE!", // percent of non-numeric
 	}
 	for expr, want := range cases {
 		t.Run(expr, func(t *testing.T) {
@@ -152,7 +154,45 @@ func TestCompute_DivZero(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t, string(sheet.ErrDiv), formula1(t, "A1 / 0"))
-	assert.Equal(t, string(sheet.ErrDiv), formula1(t, "A1 % 0"))
+	assert.Equal(t, string(sheet.ErrDiv), formula1(t, "mod(A1, 0)"))
+}
+
+func TestCompute_ExcelOperators(t *testing.T) {
+	t.Parallel()
+
+	// A1=2, C1=3, D1=4 (B1 holds the formula).
+	cases := map[string]string{
+		"2 ^ 8":             "256",  // power
+		"D1 ^ A1":           "16",   // 4^2
+		"50%":               "0.5",  // postfix percent
+		"A1 * 50%":          "1",    // 2 * 0.5
+		"-2 ^ 2":            "-4",   // ^ binds tighter than unary minus
+		`"a" & "b"`:         "ab",   // text concatenation
+		"A1 & C1":           "23",   // number operands concatenate as text
+		"mod(D1, C1)":       "1",    // MOD replaces the retired binary %
+		"mod(-7, 3)":        "-1",   // truncated toward zero
+		"TRUE":              "TRUE", // boolean literal
+		"FALSE":             "FALSE",
+		"if(TRUE, A1, C1)":  "2",
+		"if(FALSE, A1, C1)": "3",
+	}
+	for expr, want := range cases {
+		t.Run(expr, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, want, formula1(t, expr))
+		})
+	}
+}
+
+func TestCompute_StringAndErrorLiterals(t *testing.T) {
+	t.Parallel()
+
+	// A quoted string is a string value (the former #REF! gap is closed); an
+	// error-value literal is that error value and propagates.
+	assert.Equal(t, "Pass", formula1(t, `if(A1 >= 1, "Pass", "Fail")`))
+	assert.Equal(t, "hello world", formula1(t, `"hello world"`))
+	assert.Equal(t, string(sheet.ErrNA), formula1(t, "#N/A"))
+	assert.Equal(t, string(sheet.ErrNA), formula1(t, "#N/A + 1")) // propagates
 }
 
 func TestCompute_Functions(t *testing.T) {

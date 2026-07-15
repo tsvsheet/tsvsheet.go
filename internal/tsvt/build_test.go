@@ -6,146 +6,120 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/tsvt"
 )
 
-func TestBuild_SectionMarkers(t *testing.T) {
-	t.Parallel()
-
-	tmpl := parse(t, "=header(2)\n=body\n=final")
-	require.Len(t, tmpl.Lines, 3)
-
-	header, ok := tmpl.Lines[0].(tsvt.HeaderMarker)
-	require.True(t, ok)
-	assert.Equal(t, 2, header.Count)
-	assert.Equal(t, tsvt.LineNumber(1), header.At)
-
-	_, ok = tmpl.Lines[1].(tsvt.BodyMarker)
-	assert.True(t, ok)
-
-	final, ok := tmpl.Lines[2].(tsvt.FinalMarker)
-	require.True(t, ok)
-	assert.Equal(t, tsvt.LineNumber(3), final.At)
+// parse builds the AST of a formula, failing the test on a syntax error.
+func parse(t *testing.T, src string) tsvt.Expr {
+	t.Helper()
+	e, err := tsvt.ParseFormula(tsvt.FormulaText(src))
+	require.NoError(t, err)
+	return e
 }
 
-func TestBuild_StructuralCommand(t *testing.T) {
+func TestBuild_Number(t *testing.T) {
 	t.Parallel()
-
-	tmpl := parse(t, "=A<")
-	require.Len(t, tmpl.Lines, 1)
-	structural, ok := tmpl.Lines[0].(tsvt.Structural)
-	require.True(t, ok)
-	assert.Equal(t, tsvt.ModMove, structural.Mod)
-	assert.Equal(t, tsvt.ColLetters{Name: "A"}, refCol(t, structural.Ref))
+	assert.Equal(t, tsvt.Number{Text: "42"}, parse(t, "42"))
+	assert.Equal(t, tsvt.Number{Text: "3.14"}, parse(t, "3.14"))
 }
 
-func TestBuild_StructuralModifiers(t *testing.T) {
+func TestBuild_String(t *testing.T) {
 	t.Parallel()
+	assert.Equal(t, tsvt.StringLit{Value: "hi"}, parse(t, `"hi"`))
+}
 
-	cases := map[string]tsvt.Modifier{
-		"=A>": tsvt.ModShift,
-		"=A<": tsvt.ModMove,
-		"=A!": tsvt.ModDelete,
+func TestBuild_Bool(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, tsvt.BoolLit{IsTrue: true}, parse(t, "TRUE"))
+	assert.Equal(t, tsvt.BoolLit{IsTrue: false}, parse(t, "FALSE"))
+}
+
+func TestBuild_Error(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, tsvt.ErrorLit{Code: "#N/A"}, parse(t, "#N/A"))
+	assert.Equal(t, tsvt.ErrorLit{Code: "#REF!"}, parse(t, "#REF!"))
+}
+
+func TestBuild_Reference(t *testing.T) {
+	t.Parallel()
+	want := tsvt.RefOperand{Ref: tsvt.RangeRef{From: tsvt.CellRef{Col: "B", Row: 2}}}
+	assert.Equal(t, want, parse(t, "B2"))
+	// $-absolute markers are accepted and carry no positional difference.
+	assert.Equal(t, want, parse(t, "$B$2"))
+	assert.Equal(t, want, parse(t, "B$2"))
+}
+
+func TestBuild_Range(t *testing.T) {
+	t.Parallel()
+	to := tsvt.CellRef{Col: "C", Row: 3}
+	want := tsvt.RefOperand{Ref: tsvt.RangeRef{From: tsvt.CellRef{Col: "A", Row: 1}, To: &to}}
+	assert.Equal(t, want, parse(t, "A1:C3"))
+}
+
+func TestBuild_Unary(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, tsvt.Unary{X: tsvt.Number{Text: "5"}, Op: tsvt.OpNeg}, parse(t, "-5"))
+	assert.Equal(t, tsvt.Unary{X: tsvt.Number{Text: "5"}, Op: tsvt.OpPos}, parse(t, "+5"))
+}
+
+func TestBuild_Percent(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, tsvt.Percent{X: tsvt.Number{Text: "50"}}, parse(t, "50%"))
+}
+
+func TestBuild_BinaryOperators(t *testing.T) {
+	t.Parallel()
+	cases := map[string]tsvt.BinaryOp{
+		"2 ^ 8":     tsvt.OpPow,
+		"1 * 2":     tsvt.OpMul,
+		"1 / 2":     tsvt.OpDiv,
+		"1 + 2":     tsvt.OpAdd,
+		"1 - 2":     tsvt.OpSub,
+		`"a" & "b"`: tsvt.OpCat,
+		"1 = 2":     tsvt.OpEq,
+		"1 <> 2":    tsvt.OpNe,
+		"1 < 2":     tsvt.OpLt,
+		"1 <= 2":    tsvt.OpLe,
+		"1 > 2":     tsvt.OpGt,
+		"1 >= 2":    tsvt.OpGe,
 	}
-	for src, want := range cases {
+	for src, op := range cases {
 		t.Run(src, func(t *testing.T) {
 			t.Parallel()
-			structural, ok := parse(t, src).Lines[0].(tsvt.Structural)
-			require.True(t, ok)
-			assert.Equal(t, want, structural.Mod)
+			assert.Equal(t, op, parse(t, src).(tsvt.Binary).Op)
 		})
 	}
 }
 
-func TestBuild_EmptyCells(t *testing.T) {
+func TestBuild_Precedence(t *testing.T) {
 	t.Parallel()
-
-	// Leading, interior, and trailing empty cells preserve column positions.
-	row := firstRow(t, "\tA\t\tB\t")
-	require.Len(t, row.Cells, 5)
-	assert.IsType(t, tsvt.EmptyCell{}, row.Cells[0])
-	assert.IsType(t, tsvt.PlacementCell{}, row.Cells[1])
-	assert.IsType(t, tsvt.EmptyCell{}, row.Cells[2])
-	assert.IsType(t, tsvt.PlacementCell{}, row.Cells[3])
-	assert.IsType(t, tsvt.EmptyCell{}, row.Cells[4])
+	// (1 + 2) * 3 groups the addition first.
+	outer := parse(t, "(1 + 2) * 3").(tsvt.Binary)
+	assert.Equal(t, tsvt.OpMul, outer.Op)
+	assert.Equal(t, tsvt.OpAdd, outer.Left.(tsvt.Binary).Op)
 }
 
-func TestBuild_FormulaCell(t *testing.T) {
+func TestBuild_Call(t *testing.T) {
 	t.Parallel()
+	multi := parse(t, "sum(A1, B1)").(tsvt.Call)
+	assert.Equal(t, "sum", multi.Name)
+	assert.Len(t, multi.Args, 2)
 
-	cell, ok := firstCell(t, "=C + D").(tsvt.FormulaCell)
-	require.True(t, ok)
-	assert.IsType(t, tsvt.Binary{}, cell.Expr)
+	assert.Equal(t, "IF", parse(t, "IF(1, 2, 3)").(tsvt.Call).Name) // name via COL
+	assert.Empty(t, parse(t, "now()").(tsvt.Call).Args)             // no arguments
 }
 
-func TestBuild_LiteralCells(t *testing.T) {
+func TestBuild_FractionalRowRejected(t *testing.T) {
 	t.Parallel()
-
-	cases := map[string]tsvt.Literal{
-		"Total": {Kind: tsvt.LiteralName, Text: "Total"},
-		"42":    {Kind: tsvt.LiteralNumber, Text: "42"},
-	}
-	for src, want := range cases {
+	// A fractional A1 row is a syntax error; assert it surfaces through every
+	// builder path that can contain a reference.
+	for _, src := range []string{"B2.5", "-B2.5", "B2.5%", "B2.5 + 1", "1 + B2.5", "sum(B2.5)", "A1:C3.5"} {
 		t.Run(src, func(t *testing.T) {
 			t.Parallel()
-			cell, ok := firstCell(t, src).(tsvt.LiteralCell)
-			require.True(t, ok)
-			assert.Equal(t, want, cell.Value)
+			_, err := tsvt.ParseFormula(tsvt.FormulaText(src))
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrSyntax)
 		})
 	}
-}
-
-func TestBuild_PlacementFormulaPayload(t *testing.T) {
-	t.Parallel()
-
-	cell, ok := firstCell(t, "E=C + D").(tsvt.PlacementCell)
-	require.True(t, ok)
-	assert.Equal(t, tsvt.ModNone, cell.Mod)
-	payload, ok := cell.Payload.(tsvt.FormulaPayload)
-	require.True(t, ok)
-	assert.IsType(t, tsvt.Binary{}, payload.Expr)
-}
-
-func TestBuild_PlacementLiteralPayload(t *testing.T) {
-	t.Parallel()
-
-	// A$+1=Total: the leading = is the separator; Total is a literal (§11.1).
-	cell, ok := firstCell(t, "A$+1=Total").(tsvt.PlacementCell)
-	require.True(t, ok)
-	payload, ok := cell.Payload.(tsvt.LiteralPayload)
-	require.True(t, ok)
-	assert.Equal(t, tsvt.Literal{Kind: tsvt.LiteralName, Text: "Total"}, payload.Value)
-}
-
-func TestBuild_PlacementBarewordPayloadIsLiteral(t *testing.T) {
-	t.Parallel()
-
-	// A=Total: Total is a bareword, not a valid expression, so the payload is a
-	// literal (§11.1), not a formula.
-	cell, ok := firstCell(t, `A=Total`).(tsvt.PlacementCell)
-	require.True(t, ok)
-	assert.IsType(t, tsvt.LiteralPayload{}, cell.Payload)
-}
-
-func TestBuild_PlacementModifierNoPayload(t *testing.T) {
-	t.Parallel()
-
-	cell, ok := firstCell(t, "C!").(tsvt.PlacementCell)
-	require.True(t, ok)
-	assert.Equal(t, tsvt.ModDelete, cell.Mod)
-	assert.Nil(t, cell.Payload)
-}
-
-func TestBuild_QuotedPayloadIsFormulaReference(t *testing.T) {
-	t.Parallel()
-
-	// A="hello": "hello" is a valid expression (a named-column reference), so the
-	// payload is a formula, not a literal (ADR 0003 rule 16).
-	cell, ok := firstCell(t, `A="hello"`).(tsvt.PlacementCell)
-	require.True(t, ok)
-	payload, ok := cell.Payload.(tsvt.FormulaPayload)
-	require.True(t, ok)
-	ref, ok := payload.Expr.(tsvt.RefOperand)
-	require.True(t, ok)
-	assert.Equal(t, tsvt.ColNamed{Name: "hello"}, refCol(t, ref.Ref))
 }

@@ -45,3 +45,13 @@ func traceInputs(comp computer, expr tsvt.Expr) []TraceInput {
 	})
 	return inputs
 }
+
+// walkRefs visits every reference operand in an expression tree.
+func walkRefs(expr tsvt.Expr, visit func(tsvt.Reference)) {
+	if operand, ok := expr.(tsvt.RefOperand); ok {
+		visit(operand.Ref)
+	}
+	for _, child := range children(expr) {
+		walkRefs(child, visit)
+	}
+}

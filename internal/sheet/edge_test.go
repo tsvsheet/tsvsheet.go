@@ -91,16 +91,13 @@ func TestCompute_A1Forms(t *testing.T) {
 	assert.Equal(t, "2", formula1(t, "A1"))   // plain
 }
 
-func TestCompute_NonA1References(t *testing.T) {
+func TestCompute_RowZeroIsRef(t *testing.T) {
 	t.Parallel()
 
-	// Every non-A1 reference form is #REF! in the spreadsheet model.
-	for _, expr := range []string{"A0", `"x"`, "[0]", "$", "A+1", "A$", "sum((A:C)1)"} {
-		t.Run(expr, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, string(sheet.ErrRef), formula1(t, expr))
-		})
-	}
+	// Row 0 is below the grid, so `A0` is #REF! (the grammar admits the syntax;
+	// resolution rejects the row).
+	assert.Equal(t, string(sheet.ErrRef), formula1(t, "A0"))
+	assert.Equal(t, string(sheet.ErrRef), formula1(t, "sum(A0:A0)"))
 }
 
 func TestCompute_RangeInScalarContext(t *testing.T) {
@@ -108,13 +105,6 @@ func TestCompute_RangeInScalarContext(t *testing.T) {
 
 	// A range where a single value is required is #VALUE!.
 	assert.Equal(t, string(sheet.ErrValue), formula1(t, "A2:C2 + 1"))
-}
-
-func TestCompute_MatrixWithNonA1Endpoint(t *testing.T) {
-	t.Parallel()
-
-	// A matrix whose endpoint is not an A1 cell is #REF!.
-	assert.Equal(t, string(sheet.ErrRef), formula1(t, "sum(A2:$)"))
 }
 
 func TestCompute_BuiltinsPropagateErrors(t *testing.T) {

@@ -8,8 +8,11 @@ import (
 )
 
 // mod is truncated-toward-zero remainder, defined for negative and fractional
-// operands (ADR 0003 rule 14).
+// operands.
 func mod(l, r floatVal) floatVal { return floatVal(math.Mod(float64(l), float64(r))) }
+
+// power raises l to the r-th power.
+func power(l, r floatVal) floatVal { return floatVal(math.Pow(float64(l), float64(r))) }
 
 // compare applies a comparison, yielding a boolean TRUE/FALSE (ADR 0004 §1):
 // numeric when both operands are numeric (a bool compares as its 1/0), and
@@ -165,4 +168,5 @@ var functions = map[string]function{
 	"round":   {impl: fnRound, minArgs: 1, maxArgs: 2},
 	"concat":  {impl: fnConcat, minArgs: 1, maxArgs: -1},
 	"len":     {impl: fnLen, minArgs: 1, maxArgs: 1},
+	"mod":     {impl: fnMod, minArgs: 2, maxArgs: 2},
 }

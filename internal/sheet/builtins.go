@@ -142,3 +142,21 @@ func fnConcat(args []Value) Value {
 func fnLen(args []Value) Value {
 	return numberValue(floatVal(len(args[0].String())))
 }
+
+// fnMod is the remainder of dividing the first operand by the second (Excel MOD,
+// which replaces the retired binary `%`); a zero divisor is #DIV/0! and a
+// non-numeric operand is #VALUE!.
+func fnMod(args []Value) Value {
+	dividend, dv := args[0].asNumber()
+	if dv.isError() {
+		return dv
+	}
+	divisor, vv := args[1].asNumber()
+	if vv.isError() {
+		return vv
+	}
+	if divisor == 0 {
+		return errorValue(ErrDiv)
+	}
+	return numberValue(mod(floatVal(dividend), floatVal(divisor)))
+}

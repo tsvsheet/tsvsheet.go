@@ -93,35 +93,26 @@ func (c cellset) scalar() Value {
 }
 
 // resolveOperand resolves a reference operand: a single A1 cell or an A1 range.
-// A grouped range is not part of the A1 model and resolves to a single #REF!.
 func (r resolver) resolveOperand(ref tsvt.Reference) cellset {
-	rangeRef, ok := ref.(tsvt.RangeRef)
-	if !ok {
-		return refError()
-	}
+	rangeRef := ref.(tsvt.RangeRef)
 	if rangeRef.To == nil {
 		return r.resolveSingle(rangeRef.From)
 	}
-	return r.resolveMatrix(rangeRef.From, rangeRef.To)
+	return r.resolveMatrix(rangeRef.From, *rangeRef.To)
 }
 
-// refError is the #REF! result of an invalid single reference; isSingle so the
-// error propagates through scalar() rather than being masked as #VALUE!.
-func refError() cellset {
-	return cellset{values: []Value{errorValue(ErrRef)}, isSingle: true}
-}
-
-// resolveSingle resolves a single-cell reference.
-func (r resolver) resolveSingle(ep tsvt.Endpoint) cellset {
-	at, ok := a1Address(ep)
+// resolveSingle resolves a single-cell reference; an out-of-grid row (`A0`) is
+// #REF!, kept isSingle so it propagates through scalar().
+func (r resolver) resolveSingle(cell tsvt.CellRef) cellset {
+	at, ok := a1Address(cell)
 	if !ok {
-		return refError()
+		return cellset{values: []Value{errorValue(ErrRef)}, isSingle: true}
 	}
 	return cellset{values: []Value{r.comp.read(rowIndex(at.Row), colIndex(at.Col))}, isSingle: true}
 }
 
 // resolveMatrix resolves the rectangular hull of two A1 corners (`A1:B3`).
-func (r resolver) resolveMatrix(from, to tsvt.Endpoint) cellset {
+func (r resolver) resolveMatrix(from, to tsvt.CellRef) cellset {
 	a, aok := a1Address(from)
 	b, bok := a1Address(to)
 	if !aok || !bok {
@@ -143,51 +134,13 @@ func (r resolver) hull(a, b Address) []Value {
 	return values
 }
 
-// a1Address converts an endpoint to an absolute (row, col); ok is false for any
-// non-A1 form (a row selector, a `$`/named/numeric column, or a relative row).
-func a1Address(ep tsvt.Endpoint) (Address, boolResult) {
-	cellRef, isCell := ep.(tsvt.CellEndpoint)
-	if !isCell {
+// a1Address converts an A1 cell to a 0-based (row, col). ok is false for a row
+// below 1 (`A0`); the grammar guarantees a column label and an integer row.
+func a1Address(cell tsvt.CellRef) (Address, boolResult) {
+	if cell.Row < 1 {
 		return Address{}, false
 	}
-	col, colOK := a1Column(cellRef.Col)
-	row, rowOK := a1Row(cellRef.Row)
-	if !colOK || !rowOK {
-		return Address{}, false
-	}
-	return Address{Row: int(row), Col: int(col)}, true
-}
-
-// a1Column resolves a column to a 0-based index; only plain/absolute letters are
-// A1 columns (a named, numeric, last, or elided column is not).
-func a1Column(col tsvt.Col) (colIndex, boolResult) {
-	letters, ok := col.(tsvt.ColLetters)
-	if !ok {
-		return 0, false
-	}
-	return colIndex(lettersToIndex(columnLetters(letters.Name))), true
-}
-
-// a1Row resolves a row to a 0-based index. A1 rows are 1-based absolute: `A1`
-// parses as RowBefore{1}, `A$1` as RowAbs{1}; relative and wildcard forms are
-// not A1.
-func a1Row(row tsvt.RowRef) (rowIndex, boolResult) {
-	switch r := row.(type) {
-	case tsvt.RowBefore:
-		return absoluteRow(rowNumber(r.N))
-	case tsvt.RowAbs:
-		return absoluteRow(rowNumber(r.N))
-	default:
-		return 0, false
-	}
-}
-
-// absoluteRow maps a 1-based row number to a 0-based index, rejecting row 0.
-func absoluteRow(n rowNumber) (rowIndex, boolResult) {
-	if n < 1 {
-		return 0, false
-	}
-	return rowIndex(n - 1), true
+	return Address{Row: cell.Row - 1, Col: lettersToIndex(columnLetters(cell.Col))}, true
 }
 
 // ordered returns its two coordinates low-first.

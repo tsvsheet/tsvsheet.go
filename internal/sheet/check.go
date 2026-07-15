@@ -6,33 +6,27 @@ import (
 	"github.com/uplang/tsvsheet.go/internal/tsvt"
 )
 
-// Diagnostic is an advisory finding about a formula cell: an unknown function or
-// a reference that is not a valid A1 address (both compute to error values).
+// Diagnostic is an advisory finding about a formula cell: currently an unknown
+// function call (which computes to #NAME?).
 type Diagnostic struct {
 	Cell    string `json:"cell"`
 	Message string `json:"message"`
 	IsFatal bool   `json:"fatal"`
 }
 
-// Check reports the static diagnostics of a parsed sheet: unknown functions and
-// non-A1 references in each formula. Syntax errors are already rejected by
-// Parse, so Check never reports them.
+// Check reports the static diagnostics of a parsed sheet: each unknown function
+// call. Syntax errors are already rejected by Parse, and every reference the
+// narrowed grammar admits is a valid A1 form, so Check never reports those.
 func Check(s Sheet) []Diagnostic {
 	var diags []Diagnostic
 	for r, row := range s.cells {
 		for c, cl := range row {
 			if cl.isFormula() {
-				diags = append(diags, checkFormula(cl.formula, Address{Row: r, Col: c})...)
+				diags = append(diags, unknownFunctions(cl.formula, Address{Row: r, Col: c})...)
 			}
 		}
 	}
 	return diags
-}
-
-// checkFormula collects the diagnostics of one formula.
-func checkFormula(expr tsvt.Expr, at Address) []Diagnostic {
-	diags := unknownFunctions(expr, at)
-	return append(diags, nonA1References(expr, at)...)
 }
 
 // unknownFunctions flags each call to a name outside the builtin set.
@@ -42,18 +36,6 @@ func unknownFunctions(expr tsvt.Expr, at Address) []Diagnostic {
 	walkCalls(expr, func(call tsvt.Call) {
 		if !isKnownFunc(funcName(call.Name)) {
 			diags = append(diags, Diagnostic{Cell: label, Message: "unknown function: " + call.Name})
-		}
-	})
-	return diags
-}
-
-// nonA1References flags each reference that is not a valid A1 cell or range.
-func nonA1References(expr tsvt.Expr, at Address) []Diagnostic {
-	label := at.String()
-	var diags []Diagnostic
-	walkRefs(expr, func(ref tsvt.Reference) {
-		if !isA1Reference(ref) {
-			diags = append(diags, Diagnostic{Cell: label, Message: "not an A1 reference: " + RenderReference(ref)})
 		}
 	})
 	return diags
@@ -70,51 +52,28 @@ func isKnownFunc(name funcName) boolResult {
 	return boolResult(ok)
 }
 
-// isA1Reference reports whether a reference is a single A1 cell or an A1 range.
-func isA1Reference(ref tsvt.Reference) boolResult {
-	rangeRef, ok := ref.(tsvt.RangeRef)
-	if !ok {
-		return false
-	}
-	if _, fromOK := a1Address(rangeRef.From); !fromOK {
-		return false
-	}
-	if rangeRef.To == nil {
-		return true
-	}
-	_, toOK := a1Address(rangeRef.To)
-	return toOK
-}
-
 // walkCalls visits every function call in an expression tree.
 func walkCalls(expr tsvt.Expr, visit func(tsvt.Call)) {
-	switch e := expr.(type) {
-	case tsvt.Unary:
-		walkCalls(e.X, visit)
-	case tsvt.Binary:
-		walkCalls(e.Left, visit)
-		walkCalls(e.Right, visit)
-	case tsvt.Call:
-		visit(e)
-		for _, arg := range e.Args {
-			walkCalls(arg, visit)
-		}
+	if call, ok := expr.(tsvt.Call); ok {
+		visit(call)
+	}
+	for _, child := range children(expr) {
+		walkCalls(child, visit)
 	}
 }
 
-// walkRefs visits every reference operand in an expression tree.
-func walkRefs(expr tsvt.Expr, visit func(tsvt.Reference)) {
+// children returns the sub-expressions of an expression (empty for a leaf).
+func children(expr tsvt.Expr) []tsvt.Expr {
 	switch e := expr.(type) {
-	case tsvt.RefOperand:
-		visit(e.Ref)
 	case tsvt.Unary:
-		walkRefs(e.X, visit)
+		return []tsvt.Expr{e.X}
+	case tsvt.Percent:
+		return []tsvt.Expr{e.X}
 	case tsvt.Binary:
-		walkRefs(e.Left, visit)
-		walkRefs(e.Right, visit)
+		return []tsvt.Expr{e.Left, e.Right}
 	case tsvt.Call:
-		for _, arg := range e.Args {
-			walkRefs(arg, visit)
-		}
+		return e.Args
+	default:
+		return nil
 	}
 }

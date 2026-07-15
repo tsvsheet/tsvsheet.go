@@ -7,87 +7,19 @@ type BaseTsvsheetParserVisitor struct {
 	*antlr.BaseParseTreeVisitor
 }
 
-func (v *BaseTsvsheetParserVisitor) VisitWorksheet(ctx *WorksheetContext) interface{} {
+func (v *BaseTsvsheetParserVisitor) VisitErrorExpr(ctx *ErrorExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseTsvsheetParserVisitor) VisitLine(ctx *LineContext) interface{} {
+func (v *BaseTsvsheetParserVisitor) VisitNumberExpr(ctx *NumberExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseTsvsheetParserVisitor) VisitSectionCommand(ctx *SectionCommandContext) interface{} {
+func (v *BaseTsvsheetParserVisitor) VisitParenExpr(ctx *ParenExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseTsvsheetParserVisitor) VisitStructuralCommand(ctx *StructuralCommandContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitCells(ctx *CellsContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitCell(ctx *CellContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitPayload(ctx *PayloadContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitFormula(ctx *FormulaContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitLiteral(ctx *LiteralContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitReference(ctx *ReferenceContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitRangeRef(ctx *RangeRefContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitEndpoint(ctx *EndpointContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitCellRef(ctx *CellRefContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitColRef(ctx *ColRefContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitRowWildcard(ctx *RowWildcardContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitRowRef(ctx *RowRefContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitNumericRef(ctx *NumericRefContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitSignedInt(ctx *SignedIntContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitNumRow(ctx *NumRowContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitGroupedRange(ctx *GroupedRangeContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTsvsheetParserVisitor) VisitModifier(ctx *ModifierContext) interface{} {
+func (v *BaseTsvsheetParserVisitor) VisitConcatExpr(ctx *ConcatExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -107,11 +39,11 @@ func (v *BaseTsvsheetParserVisitor) VisitRefExpr(ctx *RefExprContext) interface{
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseTsvsheetParserVisitor) VisitNumberExpr(ctx *NumberExprContext) interface{} {
+func (v *BaseTsvsheetParserVisitor) VisitMulExpr(ctx *MulExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseTsvsheetParserVisitor) VisitMulExpr(ctx *MulExprContext) interface{} {
+func (v *BaseTsvsheetParserVisitor) VisitPercentExpr(ctx *PercentExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -119,7 +51,11 @@ func (v *BaseTsvsheetParserVisitor) VisitCallExpr(ctx *CallExprContext) interfac
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseTsvsheetParserVisitor) VisitParenExpr(ctx *ParenExprContext) interface{} {
+func (v *BaseTsvsheetParserVisitor) VisitBoolExpr(ctx *BoolExprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseTsvsheetParserVisitor) VisitPowExpr(ctx *PowExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -132,5 +68,13 @@ func (v *BaseTsvsheetParserVisitor) VisitFunctionCall(ctx *FunctionCallContext) 
 }
 
 func (v *BaseTsvsheetParserVisitor) VisitArgList(ctx *ArgListContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseTsvsheetParserVisitor) VisitReference(ctx *ReferenceContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseTsvsheetParserVisitor) VisitCellRef(ctx *CellRefContext) interface{} {
 	return v.VisitChildren(ctx)
 }

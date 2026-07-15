@@ -1,48 +1,55 @@
 package tsvt
 
 import (
-	"github.com/antlr4-go/antlr/v4"
-
 	grammar "github.com/uplang/tsvsheet.go/src/grammar/tsvsheet"
 )
 
-// buildExpr converts a §11 expression by its labeled alternative. The grammar's
-// stringExpr alternative is unreachable — a STRING operand always matches
-// refExpr first as a named-column reference (§11.4 / ADR 0003 rule 16) — so
-// numberExpr is the only remaining reachable alternative and forms the default.
+// buildExpr converts one expression parse node into the typed Expr AST. The
+// operator and reference forms are handled here; the leaf literals fall through
+// to buildLeaf.
 func buildExpr(ctx grammar.IExpressionContext) (Expr, error) {
 	switch c := ctx.(type) {
 	case *grammar.ParenExprContext:
 		return buildExpr(c.Expression())
+	case *grammar.PercentExprContext:
+		return buildPercent(c)
+	case *grammar.PowExprContext:
+		return buildBinary(OpPow, c.AllExpression())
 	case *grammar.UnaryExprContext:
 		return buildUnary(c)
 	case *grammar.MulExprContext:
-		return buildBinary(c.GetOp(), c.AllExpression())
+		return buildBinary(BinaryOp(c.GetOp().GetText()), c.AllExpression())
 	case *grammar.AddExprContext:
-		return buildBinary(c.GetOp(), c.AllExpression())
+		return buildBinary(BinaryOp(c.GetOp().GetText()), c.AllExpression())
+	case *grammar.ConcatExprContext:
+		return buildBinary(OpCat, c.AllExpression())
 	case *grammar.CompareExprContext:
-		return buildBinary(c.GetOp(), c.AllExpression())
+		return buildBinary(BinaryOp(c.GetOp().GetText()), c.AllExpression())
 	case *grammar.CallExprContext:
 		return buildCall(c.FunctionCall())
 	case *grammar.RefExprContext:
 		return buildRefOperand(c)
-	default: // NumberExprContext
-		return Number{Text: ctx.GetText()}, nil
+	default:
+		return buildLeaf(ctx), nil
 	}
 }
 
-// buildUnary converts a unary sign expression.
-func buildUnary(ctx *grammar.UnaryExprContext) (Expr, error) {
-	operand, err := buildExpr(ctx.Expression())
-	if err != nil {
-		return nil, err
+// buildLeaf builds a literal-leaf expression (number, string, boolean, error).
+func buildLeaf(ctx grammar.IExpressionContext) Expr {
+	switch c := ctx.(type) {
+	case *grammar.NumberExprContext:
+		return Number{Text: c.NUMBER().GetText()}
+	case *grammar.StringExprContext:
+		return StringLit{Value: unquote(quoted(c.STRING().GetText()))}
+	case *grammar.BoolExprContext:
+		return BoolLit{IsTrue: c.TRUE() != nil}
+	default: // *grammar.ErrorExprContext
+		return ErrorLit{Code: ctx.(*grammar.ErrorExprContext).ERRORCONST().GetText()}
 	}
-	return Unary{Op: UnaryOp(ctx.GetOp().GetText()), X: operand}, nil
 }
 
-// buildBinary converts a two-operand expression; the operator token text is
-// exactly the BinaryOp spelling.
-func buildBinary(op antlr.Token, operands []grammar.IExpressionContext) (Expr, error) {
+// buildBinary builds a binary operation from an operator and its two operands.
+func buildBinary(op BinaryOp, operands []grammar.IExpressionContext) (Expr, error) {
 	left, err := buildExpr(operands[0])
 	if err != nil {
 		return nil, err
@@ -51,10 +58,32 @@ func buildBinary(op antlr.Token, operands []grammar.IExpressionContext) (Expr, e
 	if err != nil {
 		return nil, err
 	}
-	return Binary{Op: BinaryOp(op.GetText()), Left: left, Right: right}, nil
+	return Binary{Left: left, Right: right, Op: op}, nil
 }
 
-// buildRefOperand converts a reference used as an operand.
+// buildUnary builds a unary sign operation.
+func buildUnary(ctx *grammar.UnaryExprContext) (Expr, error) {
+	x, err := buildExpr(ctx.Expression())
+	if err != nil {
+		return nil, err
+	}
+	op := OpNeg
+	if ctx.PLUS() != nil {
+		op = OpPos
+	}
+	return Unary{X: x, Op: op}, nil
+}
+
+// buildPercent builds a postfix-percent operation.
+func buildPercent(ctx *grammar.PercentExprContext) (Expr, error) {
+	x, err := buildExpr(ctx.Expression())
+	if err != nil {
+		return nil, err
+	}
+	return Percent{X: x}, nil
+}
+
+// buildRefOperand wraps an A1 reference as an expression operand.
 func buildRefOperand(ctx *grammar.RefExprContext) (Expr, error) {
 	ref, err := buildReference(ctx.Reference())
 	if err != nil {
@@ -63,8 +92,7 @@ func buildRefOperand(ctx *grammar.RefExprContext) (Expr, error) {
 	return RefOperand{Ref: ref}, nil
 }
 
-// buildCall converts a function call; the name token is NAME or an uppercase
-// COL (`IF`).
+// buildCall builds a function call, evaluating its argument expressions.
 func buildCall(ctx grammar.IFunctionCallContext) (Expr, error) {
 	args, err := buildArgs(ctx.ArgList())
 	if err != nil {
@@ -73,7 +101,7 @@ func buildCall(ctx grammar.IFunctionCallContext) (Expr, error) {
 	return Call{Name: callName(ctx), Args: args}, nil
 }
 
-// callName extracts the case-preserved function name.
+// callName is the function's case-preserved name (a NAME or an all-caps COL).
 func callName(ctx grammar.IFunctionCallContext) string {
 	if name := ctx.NAME(); name != nil {
 		return name.GetText()
@@ -81,19 +109,19 @@ func callName(ctx grammar.IFunctionCallContext) string {
 	return ctx.COL().GetText()
 }
 
-// buildArgs converts an optional argument list.
+// buildArgs builds each argument expression; a nil arg list is no arguments.
 func buildArgs(ctx grammar.IArgListContext) ([]Expr, error) {
 	if ctx == nil {
 		return nil, nil
 	}
-	contexts := ctx.AllExpression()
-	args := make([]Expr, 0, len(contexts))
-	for _, c := range contexts {
-		arg, err := buildExpr(c)
+	exprs := ctx.AllExpression()
+	args := make([]Expr, len(exprs))
+	for i, e := range exprs {
+		arg, err := buildExpr(e)
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, arg)
+		args[i] = arg
 	}
 	return args, nil
 }

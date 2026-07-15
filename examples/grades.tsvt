@@ -1,5 +1,5 @@
-Student	Math	Reading	Science	Average	Pass
-Alice	85	90	78	=round(avg(B2:D2), 1)	=if(E2 >= 70, 1, 0)
-Bob	72	68	80	=round(avg(B3:D3), 1)	=if(E3 >= 70, 1, 0)
-Carol	95	88	91	=round(avg(B4:D4), 1)	=if(E4 >= 70, 1, 0)
-Dave	60	55	70	=round(avg(B5:D5), 1)	=if(E5 >= 70, 1, 0)
+Student	Math	Reading	Science	Average	Result
+Alice	85	90	78	=round(avg(B2:D2), 1)	=if(E2 >= 70, "Pass", "Fail")
+Bob	72	68	80	=round(avg(B3:D3), 1)	=if(E3 >= 70, "Pass", "Fail")
+Carol	95	88	91	=round(avg(B4:D4), 1)	=if(E4 >= 70, "Pass", "Fail")
+Dave	60	55	70	=round(avg(B5:D5), 1)	=if(E5 >= 70, "Pass", "Fail")

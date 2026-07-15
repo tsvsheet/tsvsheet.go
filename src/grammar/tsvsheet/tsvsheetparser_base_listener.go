@@ -20,131 +20,29 @@ func (s *BaseTsvsheetParserListener) EnterEveryRule(ctx antlr.ParserRuleContext)
 // ExitEveryRule is called when any rule is exited.
 func (s *BaseTsvsheetParserListener) ExitEveryRule(ctx antlr.ParserRuleContext) {}
 
-// EnterWorksheet is called when production worksheet is entered.
-func (s *BaseTsvsheetParserListener) EnterWorksheet(ctx *WorksheetContext) {}
+// EnterErrorExpr is called when production errorExpr is entered.
+func (s *BaseTsvsheetParserListener) EnterErrorExpr(ctx *ErrorExprContext) {}
 
-// ExitWorksheet is called when production worksheet is exited.
-func (s *BaseTsvsheetParserListener) ExitWorksheet(ctx *WorksheetContext) {}
+// ExitErrorExpr is called when production errorExpr is exited.
+func (s *BaseTsvsheetParserListener) ExitErrorExpr(ctx *ErrorExprContext) {}
 
-// EnterLine is called when production line is entered.
-func (s *BaseTsvsheetParserListener) EnterLine(ctx *LineContext) {}
+// EnterNumberExpr is called when production numberExpr is entered.
+func (s *BaseTsvsheetParserListener) EnterNumberExpr(ctx *NumberExprContext) {}
 
-// ExitLine is called when production line is exited.
-func (s *BaseTsvsheetParserListener) ExitLine(ctx *LineContext) {}
+// ExitNumberExpr is called when production numberExpr is exited.
+func (s *BaseTsvsheetParserListener) ExitNumberExpr(ctx *NumberExprContext) {}
 
-// EnterSectionCommand is called when production sectionCommand is entered.
-func (s *BaseTsvsheetParserListener) EnterSectionCommand(ctx *SectionCommandContext) {}
+// EnterParenExpr is called when production parenExpr is entered.
+func (s *BaseTsvsheetParserListener) EnterParenExpr(ctx *ParenExprContext) {}
 
-// ExitSectionCommand is called when production sectionCommand is exited.
-func (s *BaseTsvsheetParserListener) ExitSectionCommand(ctx *SectionCommandContext) {}
+// ExitParenExpr is called when production parenExpr is exited.
+func (s *BaseTsvsheetParserListener) ExitParenExpr(ctx *ParenExprContext) {}
 
-// EnterStructuralCommand is called when production structuralCommand is entered.
-func (s *BaseTsvsheetParserListener) EnterStructuralCommand(ctx *StructuralCommandContext) {}
+// EnterConcatExpr is called when production concatExpr is entered.
+func (s *BaseTsvsheetParserListener) EnterConcatExpr(ctx *ConcatExprContext) {}
 
-// ExitStructuralCommand is called when production structuralCommand is exited.
-func (s *BaseTsvsheetParserListener) ExitStructuralCommand(ctx *StructuralCommandContext) {}
-
-// EnterCells is called when production cells is entered.
-func (s *BaseTsvsheetParserListener) EnterCells(ctx *CellsContext) {}
-
-// ExitCells is called when production cells is exited.
-func (s *BaseTsvsheetParserListener) ExitCells(ctx *CellsContext) {}
-
-// EnterCell is called when production cell is entered.
-func (s *BaseTsvsheetParserListener) EnterCell(ctx *CellContext) {}
-
-// ExitCell is called when production cell is exited.
-func (s *BaseTsvsheetParserListener) ExitCell(ctx *CellContext) {}
-
-// EnterPayload is called when production payload is entered.
-func (s *BaseTsvsheetParserListener) EnterPayload(ctx *PayloadContext) {}
-
-// ExitPayload is called when production payload is exited.
-func (s *BaseTsvsheetParserListener) ExitPayload(ctx *PayloadContext) {}
-
-// EnterFormula is called when production formula is entered.
-func (s *BaseTsvsheetParserListener) EnterFormula(ctx *FormulaContext) {}
-
-// ExitFormula is called when production formula is exited.
-func (s *BaseTsvsheetParserListener) ExitFormula(ctx *FormulaContext) {}
-
-// EnterLiteral is called when production literal is entered.
-func (s *BaseTsvsheetParserListener) EnterLiteral(ctx *LiteralContext) {}
-
-// ExitLiteral is called when production literal is exited.
-func (s *BaseTsvsheetParserListener) ExitLiteral(ctx *LiteralContext) {}
-
-// EnterReference is called when production reference is entered.
-func (s *BaseTsvsheetParserListener) EnterReference(ctx *ReferenceContext) {}
-
-// ExitReference is called when production reference is exited.
-func (s *BaseTsvsheetParserListener) ExitReference(ctx *ReferenceContext) {}
-
-// EnterRangeRef is called when production rangeRef is entered.
-func (s *BaseTsvsheetParserListener) EnterRangeRef(ctx *RangeRefContext) {}
-
-// ExitRangeRef is called when production rangeRef is exited.
-func (s *BaseTsvsheetParserListener) ExitRangeRef(ctx *RangeRefContext) {}
-
-// EnterEndpoint is called when production endpoint is entered.
-func (s *BaseTsvsheetParserListener) EnterEndpoint(ctx *EndpointContext) {}
-
-// ExitEndpoint is called when production endpoint is exited.
-func (s *BaseTsvsheetParserListener) ExitEndpoint(ctx *EndpointContext) {}
-
-// EnterCellRef is called when production cellRef is entered.
-func (s *BaseTsvsheetParserListener) EnterCellRef(ctx *CellRefContext) {}
-
-// ExitCellRef is called when production cellRef is exited.
-func (s *BaseTsvsheetParserListener) ExitCellRef(ctx *CellRefContext) {}
-
-// EnterColRef is called when production colRef is entered.
-func (s *BaseTsvsheetParserListener) EnterColRef(ctx *ColRefContext) {}
-
-// ExitColRef is called when production colRef is exited.
-func (s *BaseTsvsheetParserListener) ExitColRef(ctx *ColRefContext) {}
-
-// EnterRowWildcard is called when production rowWildcard is entered.
-func (s *BaseTsvsheetParserListener) EnterRowWildcard(ctx *RowWildcardContext) {}
-
-// ExitRowWildcard is called when production rowWildcard is exited.
-func (s *BaseTsvsheetParserListener) ExitRowWildcard(ctx *RowWildcardContext) {}
-
-// EnterRowRef is called when production rowRef is entered.
-func (s *BaseTsvsheetParserListener) EnterRowRef(ctx *RowRefContext) {}
-
-// ExitRowRef is called when production rowRef is exited.
-func (s *BaseTsvsheetParserListener) ExitRowRef(ctx *RowRefContext) {}
-
-// EnterNumericRef is called when production numericRef is entered.
-func (s *BaseTsvsheetParserListener) EnterNumericRef(ctx *NumericRefContext) {}
-
-// ExitNumericRef is called when production numericRef is exited.
-func (s *BaseTsvsheetParserListener) ExitNumericRef(ctx *NumericRefContext) {}
-
-// EnterSignedInt is called when production signedInt is entered.
-func (s *BaseTsvsheetParserListener) EnterSignedInt(ctx *SignedIntContext) {}
-
-// ExitSignedInt is called when production signedInt is exited.
-func (s *BaseTsvsheetParserListener) ExitSignedInt(ctx *SignedIntContext) {}
-
-// EnterNumRow is called when production numRow is entered.
-func (s *BaseTsvsheetParserListener) EnterNumRow(ctx *NumRowContext) {}
-
-// ExitNumRow is called when production numRow is exited.
-func (s *BaseTsvsheetParserListener) ExitNumRow(ctx *NumRowContext) {}
-
-// EnterGroupedRange is called when production groupedRange is entered.
-func (s *BaseTsvsheetParserListener) EnterGroupedRange(ctx *GroupedRangeContext) {}
-
-// ExitGroupedRange is called when production groupedRange is exited.
-func (s *BaseTsvsheetParserListener) ExitGroupedRange(ctx *GroupedRangeContext) {}
-
-// EnterModifier is called when production modifier is entered.
-func (s *BaseTsvsheetParserListener) EnterModifier(ctx *ModifierContext) {}
-
-// ExitModifier is called when production modifier is exited.
-func (s *BaseTsvsheetParserListener) ExitModifier(ctx *ModifierContext) {}
+// ExitConcatExpr is called when production concatExpr is exited.
+func (s *BaseTsvsheetParserListener) ExitConcatExpr(ctx *ConcatExprContext) {}
 
 // EnterStringExpr is called when production stringExpr is entered.
 func (s *BaseTsvsheetParserListener) EnterStringExpr(ctx *StringExprContext) {}
@@ -170,17 +68,17 @@ func (s *BaseTsvsheetParserListener) EnterRefExpr(ctx *RefExprContext) {}
 // ExitRefExpr is called when production refExpr is exited.
 func (s *BaseTsvsheetParserListener) ExitRefExpr(ctx *RefExprContext) {}
 
-// EnterNumberExpr is called when production numberExpr is entered.
-func (s *BaseTsvsheetParserListener) EnterNumberExpr(ctx *NumberExprContext) {}
-
-// ExitNumberExpr is called when production numberExpr is exited.
-func (s *BaseTsvsheetParserListener) ExitNumberExpr(ctx *NumberExprContext) {}
-
 // EnterMulExpr is called when production mulExpr is entered.
 func (s *BaseTsvsheetParserListener) EnterMulExpr(ctx *MulExprContext) {}
 
 // ExitMulExpr is called when production mulExpr is exited.
 func (s *BaseTsvsheetParserListener) ExitMulExpr(ctx *MulExprContext) {}
+
+// EnterPercentExpr is called when production percentExpr is entered.
+func (s *BaseTsvsheetParserListener) EnterPercentExpr(ctx *PercentExprContext) {}
+
+// ExitPercentExpr is called when production percentExpr is exited.
+func (s *BaseTsvsheetParserListener) ExitPercentExpr(ctx *PercentExprContext) {}
 
 // EnterCallExpr is called when production callExpr is entered.
 func (s *BaseTsvsheetParserListener) EnterCallExpr(ctx *CallExprContext) {}
@@ -188,11 +86,17 @@ func (s *BaseTsvsheetParserListener) EnterCallExpr(ctx *CallExprContext) {}
 // ExitCallExpr is called when production callExpr is exited.
 func (s *BaseTsvsheetParserListener) ExitCallExpr(ctx *CallExprContext) {}
 
-// EnterParenExpr is called when production parenExpr is entered.
-func (s *BaseTsvsheetParserListener) EnterParenExpr(ctx *ParenExprContext) {}
+// EnterBoolExpr is called when production boolExpr is entered.
+func (s *BaseTsvsheetParserListener) EnterBoolExpr(ctx *BoolExprContext) {}
 
-// ExitParenExpr is called when production parenExpr is exited.
-func (s *BaseTsvsheetParserListener) ExitParenExpr(ctx *ParenExprContext) {}
+// ExitBoolExpr is called when production boolExpr is exited.
+func (s *BaseTsvsheetParserListener) ExitBoolExpr(ctx *BoolExprContext) {}
+
+// EnterPowExpr is called when production powExpr is entered.
+func (s *BaseTsvsheetParserListener) EnterPowExpr(ctx *PowExprContext) {}
+
+// ExitPowExpr is called when production powExpr is exited.
+func (s *BaseTsvsheetParserListener) ExitPowExpr(ctx *PowExprContext) {}
 
 // EnterCompareExpr is called when production compareExpr is entered.
 func (s *BaseTsvsheetParserListener) EnterCompareExpr(ctx *CompareExprContext) {}
@@ -211,3 +115,15 @@ func (s *BaseTsvsheetParserListener) EnterArgList(ctx *ArgListContext) {}
 
 // ExitArgList is called when production argList is exited.
 func (s *BaseTsvsheetParserListener) ExitArgList(ctx *ArgListContext) {}
+
+// EnterReference is called when production reference is entered.
+func (s *BaseTsvsheetParserListener) EnterReference(ctx *ReferenceContext) {}
+
+// ExitReference is called when production reference is exited.
+func (s *BaseTsvsheetParserListener) ExitReference(ctx *ReferenceContext) {}
+
+// EnterCellRef is called when production cellRef is entered.
+func (s *BaseTsvsheetParserListener) EnterCellRef(ctx *CellRefContext) {}
+
+// ExitCellRef is called when production cellRef is exited.
+func (s *BaseTsvsheetParserListener) ExitCellRef(ctx *CellRefContext) {}

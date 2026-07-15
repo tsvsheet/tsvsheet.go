@@ -10,14 +10,19 @@ import (
 type ErrorValue string
 
 // The error values. #REF! (out-of-grid), #VALUE! (type), #NAME? (unknown
-// function / unbound name), #DIV/0! (division or modulo by zero), #CIRC!
-// (a formula whose evaluation depends on itself).
+// function), #DIV/0! (division by zero), #CIRC! (a formula whose evaluation
+// depends on itself), #N/A (lookup miss / NA()), #NUM! (numeric domain), #NULL!
+// (empty range intersection), #SPILL! (blocked dynamic-array spill).
 const (
 	ErrRef   ErrorValue = "#REF!"
 	ErrValue ErrorValue = "#VALUE!"
 	ErrName  ErrorValue = "#NAME?"
 	ErrDiv   ErrorValue = "#DIV/0!"
 	ErrCirc  ErrorValue = "#CIRC!"
+	ErrNA    ErrorValue = "#N/A"
+	ErrNum   ErrorValue = "#NUM!"
+	ErrNull  ErrorValue = "#NULL!"
+	ErrSpill ErrorValue = "#SPILL!"
 )
 
 // valueKind tags the inhabited value shapes plus empty.
@@ -78,7 +83,7 @@ func value(raw textVal) Value {
 // isErrorCode reports whether raw is one of the error values.
 func isErrorCode(raw textVal) bool {
 	switch ErrorValue(raw) {
-	case ErrRef, ErrValue, ErrName, ErrDiv, ErrCirc:
+	case ErrRef, ErrValue, ErrName, ErrDiv, ErrCirc, ErrNA, ErrNum, ErrNull, ErrSpill:
 		return true
 	default:
 		return false
