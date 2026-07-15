@@ -144,6 +144,33 @@ func TestExplain_OutOfGrid(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
+func TestReferences_OK(t *testing.T) {
+	t.Parallel()
+
+	// D2 (=B2+C2) reads B2 and C2; D2 itself is read by nothing.
+	srv, _ := testServer(t)
+	rec := do(t, srv, http.MethodGet, "/api/references?cell=D2", "")
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var refs struct {
+		Precedents []sheet.Span    `json:"precedents"`
+		Dependents []sheet.Address `json:"dependents"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &refs))
+	require.Len(t, refs.Precedents, 2)
+	assert.Equal(t, sheet.Address{Row: 1, Col: 1}, refs.Precedents[0].From) // B2
+	assert.Equal(t, sheet.Address{Row: 1, Col: 2}, refs.Precedents[1].From) // C2
+	assert.Empty(t, refs.Dependents)
+}
+
+func TestReferences_BadCell(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := testServer(t)
+	rec := do(t, srv, http.MethodGet, "/api/references?cell=bogus", "")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestUI_ServesHTML(t *testing.T) {
 	t.Parallel()
 

@@ -27,6 +27,20 @@ func newSession(t *testing.T) *session.Session {
 	return s
 }
 
+func TestReferences_PrecedentsAndDependents(t *testing.T) {
+	t.Parallel()
+
+	// B2 is read by D2 (=B2+C2); D2 reads B2 and C2.
+	s := newSession(t)
+	prec, deps := s.References(sheet.Address{Row: 1, Col: 3})
+	require.Len(t, prec, 2)
+	assert.Equal(t, sheet.Address{Row: 1, Col: 1}, prec[0].From) // B2
+	assert.Empty(t, deps)                                        // nothing reads D2
+
+	_, deps = s.References(sheet.Address{Row: 1, Col: 1})
+	assert.Equal(t, []sheet.Address{{Row: 1, Col: 3}}, deps) // B2 read by D2
+}
+
 func TestNew_ComputesEagerly(t *testing.T) {
 	t.Parallel()
 

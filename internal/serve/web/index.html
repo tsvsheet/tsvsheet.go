@@ -17,6 +17,9 @@
     --err: #b3261e;
     --err-bg: #fbe9e7;
     --accent: #1f5c8a;
+    --precedent-bg: #e4eef6;
+    --dependent: #3f8f5b;
+    --dependent-bg: #e6f2ea;
     --dirty: #c98a1a;
     --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
   }
@@ -25,6 +28,7 @@
       --ink: #d8dee6; --paper: #12161b; --rule: #29313a; --rule-strong: #3a444f;
       --head: #7d8b98; --head-bg: #1a1f26; --formula: #221d12; --formula-mark: #d7a24a;
       --err: #ff6b5e; --err-bg: #2a1613; --accent: #5aa0d6; --dirty: #d7a24a;
+      --precedent-bg: #14202b; --dependent: #5cae79; --dependent-bg: #16241b;
     }
   }
   * { box-sizing: border-box; }
@@ -80,7 +84,14 @@
   td.cell:hover { outline: 1px solid var(--accent); outline-offset: -1px; }
   td.formula { background: var(--formula); border-left: 2px solid var(--formula-mark); }
   td.err { background: var(--err-bg); color: var(--err); }
-  td.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+  td.selected { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; }
+  td.precedent { background: var(--precedent-bg); box-shadow: inset 0 0 0 2px var(--accent); }
+  td.dependent { background: var(--dependent-bg); box-shadow: inset 0 0 0 2px var(--dependent); }
+  .reflegend { color: var(--head); font-size: 11px; display: none; gap: 0.9rem; align-items: center; }
+  .reflegend.on { display: inline-flex; }
+  .reflegend .swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px; vertical-align: -1px; margin-right: 0.3rem; }
+  .reflegend .swatch.prec { background: var(--precedent-bg); box-shadow: inset 0 0 0 2px var(--accent); }
+  .reflegend .swatch.dep { background: var(--dependent-bg); box-shadow: inset 0 0 0 2px var(--dependent); }
   td input {
     font-family: var(--mono); font-size: 13px; width: 100%; border: none;
     background: transparent; color: var(--ink); text-align: right; padding: 0;
@@ -93,6 +104,10 @@
 <header>
   <span class="mark">tsv<b>sheet</b></span>
   <span class="hint">a cell is a value or an =formula · click to edit</span>
+  <span id="reflegend" class="reflegend">
+    <span><span class="swatch prec"></span>reads</span>
+    <span><span class="swatch dep"></span>read by</span>
+  </span>
   <span class="spacer"></span>
   <span id="state" class="state">loading…</span>
   <button id="save" type="button">Save</button>
@@ -113,6 +128,7 @@
     diagnostics: document.getElementById("diagnostics"),
     state: document.getElementById("state"),
     save: document.getElementById("save"),
+    reflegend: document.getElementById("reflegend"),
   };
   let sheet = { computed: [], source: [] };
   let sel = { row: 0, col: 0 };
@@ -149,6 +165,7 @@
       renderGrid(state, w);
     }
     renderSelection();
+    highlightReferences(sel.row, sel.col);
     renderDiagnostics(state.diagnostics);
     els.state.textContent = state.dirty ? "unsaved changes" : "saved";
     els.state.classList.toggle("dirty", state.dirty);
@@ -200,15 +217,36 @@
   function select(r, c) {
     sel = { row: r, col: c };
     renderSelection();
-    els.addr.textContent = a1(r, c);
     els.formula.value = at(sheet.source, r, c);
+    highlightReferences(r, c);
   }
 
   function renderSelection() {
     els.grid.querySelectorAll("td.selected").forEach((td) => td.classList.remove("selected"));
-    const td = els.grid.querySelector(`td[data-row="${sel.row}"][data-col="${sel.col}"]`);
+    const td = tdAt(sel.row, sel.col);
     if (td) td.classList.add("selected");
     els.addr.textContent = a1(sel.row, sel.col);
+  }
+
+  const tdAt = (r, c) => els.grid.querySelector(`td[data-row="${r}"][data-col="${c}"]`);
+
+  function markSpan(from, to, cls) {
+    for (let r = Math.min(from.row, to.row); r <= Math.max(from.row, to.row); r++)
+      for (let c = Math.min(from.col, to.col); c <= Math.max(from.col, to.col); c++)
+        tdAt(r, c)?.classList.add(cls);
+  }
+
+  // highlightReferences paints the selected cell's precedents (cells it reads)
+  // and dependents (cells that read it), fetched from the engine.
+  async function highlightReferences(r, c) {
+    els.grid.querySelectorAll("td.precedent, td.dependent")
+      .forEach((td) => td.classList.remove("precedent", "dependent"));
+    let refs;
+    try { refs = await api("GET", `/api/references?cell=${a1(r, c)}`); }
+    catch { els.reflegend.classList.remove("on"); return; }
+    refs.precedents.forEach((s) => markSpan(s.from, s.to, "precedent"));
+    refs.dependents.forEach((d) => markSpan(d, d, "dependent"));
+    els.reflegend.classList.toggle("on", refs.precedents.length + refs.dependents.length > 0);
   }
 
   async function commit(r, c, text) {

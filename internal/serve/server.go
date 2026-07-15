@@ -35,6 +35,7 @@ func (srv Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/cell", srv.handleCell)
 	mux.HandleFunc("POST /api/save", srv.handleSave)
 	mux.HandleFunc("GET /api/explain", srv.handleExplain)
+	mux.HandleFunc("GET /api/references", srv.handleReferences)
 	mux.Handle("GET /", uiHandler())
 	return mux
 }
@@ -94,6 +95,26 @@ func (srv Server) handleExplain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, trace)
+}
+
+// referencesResponse is the GET /api/references body: the selected cell's
+// precedents (spans its formula reads) and dependents (cells that read it).
+type referencesResponse struct {
+	Precedents []sheet.Span    `json:"precedents"`
+	Dependents []sheet.Address `json:"dependents"`
+}
+
+// handleReferences returns the dependency edges of the cell named by the `cell`
+// query parameter, for highlighting. An off-grid or non-formula cell simply has
+// empty edges — only a malformed address is a 400.
+func (srv Server) handleReferences(w http.ResponseWriter, r *http.Request) {
+	at, err := sheet.ParseAddress(sheet.AddressText(r.URL.Query().Get("cell")))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	precedents, dependents := srv.session.References(at)
+	writeJSON(w, http.StatusOK, referencesResponse{Precedents: precedents, Dependents: dependents})
 }
 
 // decode reads a JSON request body into v, writing a 400 and returning false on

@@ -87,6 +87,15 @@ func (s *Session) Explain(addr sheet.Address) (sheet.Trace, error) {
 	return sheet.Explain(s.sheet, addr)
 }
 
+// References returns the cell at addr's precedents (the spans its formula reads)
+// and dependents (the cells whose formulas read it) — the dependency edges a
+// frontend highlights on selection.
+func (s *Session) References(addr sheet.Address) ([]sheet.Span, []sheet.Address) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sheet.Precedents(addr), s.sheet.Dependents(addr)
+}
+
 // MarkSaved clears the dirty flag after a frontend persists the spreadsheet.
 func (s *Session) MarkSaved() {
 	s.mu.Lock()
