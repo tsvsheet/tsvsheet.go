@@ -9,6 +9,7 @@ import (
 
 	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/loader"
+	"github.com/uplang/tsvsheet.go/internal/refresh"
 	"github.com/uplang/tsvsheet.go/internal/session"
 	"github.com/uplang/tsvsheet.go/internal/sheet"
 	"github.com/uplang/tsvsheet.go/internal/tui"
@@ -29,7 +30,11 @@ func runTUI(streams Streams, cfg tuiConfig) error {
 	if err != nil {
 		return err
 	}
-	return runProgram(tui.New(sess, tui.Saver(persist)), streams.In, streams.Out)
+	next, err := buildRefresh(refresh.Spec(cfg.refresh), sess)
+	if err != nil {
+		return err
+	}
+	return runProgram(tui.New(sess, tui.Saver(persist), next), streams.In, streams.Out)
 }
 
 // loadEditable reads a file-backed spreadsheet into a session and returns it

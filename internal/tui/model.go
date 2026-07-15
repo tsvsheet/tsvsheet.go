@@ -6,8 +6,11 @@
 package tui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/uplang/tsvsheet.go/internal/refresh"
 	"github.com/uplang/tsvsheet.go/internal/session"
 	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
@@ -27,6 +30,7 @@ const (
 type Model struct {
 	session          *session.Session
 	save             Saver
+	refresh          refresh.Next
 	buffer           string
 	status           string
 	state            session.State
@@ -37,9 +41,26 @@ type Model struct {
 	isQuitting       bool
 }
 
-// New builds a model over a session and its saver, taking an initial snapshot.
-func New(s *session.Session, save Saver) Model {
-	return Model{session: s, save: save, state: s.Snapshot(), status: helpNav}
+// New builds a model over a session, its saver, and an auto-refresh cadence
+// (nil disables the tick), taking an initial snapshot.
+func New(s *session.Session, save Saver, next refresh.Next) Model {
+	return Model{session: s, save: save, refresh: next, state: s.Snapshot(), status: helpNav}
+}
+
+// tickMsg fires when the auto-refresh cadence is due.
+type tickMsg time.Time
+
+// tick schedules the next auto-refresh, or nil when the cadence is disabled or
+// exhausted (an isnow schedule with no further occurrence).
+func (m Model) tick() tea.Cmd {
+	if m.refresh == nil {
+		return nil
+	}
+	d := m.refresh(time.Now())
+	if d <= 0 {
+		return nil
+	}
+	return tea.Tick(d, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
 // helpNav and helpEdit are the mode hints.
@@ -57,19 +78,27 @@ const (
 // editText is an in-progress cell edit buffer.
 type editText string
 
-// Init implements tea.Model; the initial state is already loaded.
-func (Model) Init() tea.Cmd { return nil }
+// Init implements tea.Model; the state is already loaded, so it only arms the
+// auto-refresh tick (if any).
+func (m Model) Init() tea.Cmd { return m.tick() }
 
-// Update implements tea.Model, dispatching key messages by mode.
+// Update implements tea.Model, dispatching key messages by mode and refreshing
+// volatile cells on each tick (except mid-edit, so an in-progress edit is not
+// disturbed); the tick re-arms itself.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	key, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
+	switch msg := msg.(type) {
+	case tickMsg:
+		if m.mode == modeNav {
+			m.state = m.session.Recompute()
+		}
+		return m, m.tick()
+	case tea.KeyMsg:
+		if m.mode == modeEdit {
+			return m.keyEdit(msg)
+		}
+		return m.keyNav(msg)
 	}
-	if m.mode == modeEdit {
-		return m.keyEdit(key)
-	}
-	return m.keyNav(key)
+	return m, nil
 }
 
 // keyNav handles navigation-mode keys: cursor movement and commands.

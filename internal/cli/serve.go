@@ -2,20 +2,18 @@ package cli
 
 import (
 	"context"
-	"time"
 
 	"github.com/urfave/cli/v3"
 )
 
 // serveConfig binds the serve command's spreadsheet path, bind address,
-// path-access mode, and auto-refresh interval.
+// path-access mode, and auto-refresh cadence (a duration or an isnow pattern).
 type serveConfig struct {
 	source       sourcePath
 	host         string
-	refresh      time.Duration
+	refresh      string
 	port         int
 	isUnconfined pathAccess
-	isRefreshSet bool
 }
 
 // flagRefreshInterval sets the browser's auto-refresh cadence for volatile
@@ -55,16 +53,15 @@ Examples:
 				Destination: &cfg.port,
 			},
 			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
-			&cli.DurationFlag{
+			&cli.StringFlag{
 				Name:        flagRefreshInterval,
-				Usage:       "Auto-recompute the browser view at this interval; 0 disables. Default: 1s when the sheet has clock functions (TODAY/NOW/ISNOW), else off",
+				Usage:       `Auto-recompute the browser view: a duration (30s) or an isnow pattern ("M-F +[30mn] >=9 <=17"); 0 disables. Default: 1s when the sheet has clock functions (TODAY/NOW/ISNOW), else off`,
 				Destination: &cfg.refresh,
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			cfg.source = positional(c.Args().Slice()).at(0)
 			cfg.isUnconfined = pathAccess(isUnconfined)
-			cfg.isRefreshSet = c.IsSet(flagRefreshInterval)
 			return runServe(ctx, cfg)
 		},
 	}

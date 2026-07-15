@@ -13,7 +13,7 @@ import (
 	"github.com/uplang/tsvsheet.go/internal/session"
 )
 
-func TestEffectiveRefresh(t *testing.T) {
+func TestBuildRefresh(t *testing.T) {
 	t.Parallel()
 
 	plain, err := session.New([]byte(sampleSheet)) // no clock functions
@@ -21,11 +21,32 @@ func TestEffectiveRefresh(t *testing.T) {
 	volatile, err := session.New([]byte("=now()\n"))
 	require.NoError(t, err)
 
-	// An explicit interval always wins.
-	assert.Equal(t, 5*time.Second, effectiveRefresh(serveConfig{refresh: 5 * time.Second, isRefreshSet: true}, plain))
-	// Unset + volatile sheet → the default; unset + plain sheet → off.
-	assert.Equal(t, defaultRefresh, effectiveRefresh(serveConfig{}, volatile))
-	assert.Equal(t, time.Duration(0), effectiveRefresh(serveConfig{}, plain))
+	// An explicit interval wins.
+	fixed, err := buildRefresh("5s", plain)
+	require.NoError(t, err)
+	assert.Equal(t, 5*time.Second, fixed(time.Now()))
+
+	// Unset + volatile → default; unset + plain → off (nil).
+	def, err := buildRefresh("", volatile)
+	require.NoError(t, err)
+	assert.Equal(t, defaultRefresh, def(time.Now()))
+
+	off, err := buildRefresh("", plain)
+	require.NoError(t, err)
+	assert.Nil(t, off)
+
+	// A malformed isnow pattern is rejected.
+	_, err = buildRefresh("garbage!!!", plain)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+}
+
+func TestLoadServer_BadRefreshPattern(t *testing.T) {
+	t.Parallel()
+
+	_, err := loadServer(serveConfig{source: sheetFile(t), refresh: "garbage!!!"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidValue)
 }
 
 // sheetFile writes the sample spreadsheet to a temp file and returns its path.

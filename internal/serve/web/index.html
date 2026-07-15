@@ -388,15 +388,26 @@
   api("GET", "/api/state").then(render).catch(reportError);
 
   // Auto-refresh: when the sheet has clock functions (TODAY/NOW/ISNOW), the
-  // server reports a refresh cadence; recompute on that interval so volatile
-  // cells stay live. A local edit in progress is left alone.
-  api("GET", "/api/config").then((cfg) => {
-    if (!cfg.refresh_millis) return;
-    setInterval(async () => {
-      if (document.activeElement && document.activeElement.tagName === "INPUT") return;
-      try { render(await api("POST", "/api/recompute")); } catch (err) { reportError(err); }
-    }, cfg.refresh_millis);
-  }).catch(() => {});
+  // server reports the delay until the next refresh. The delay can vary (an
+  // isnow schedule fires "every 30 min, 9-to-5"), so each recompute carries the
+  // next delay and we re-arm a one-shot timer. A cell being edited is left alone.
+  function scheduleRefresh(ms) {
+    if (!ms || ms <= 0) return;
+    setTimeout(async () => {
+      if (document.activeElement && document.activeElement.tagName === "INPUT") {
+        scheduleRefresh(ms); // retry after the same delay while editing
+        return;
+      }
+      try {
+        const resp = await api("POST", "/api/recompute");
+        render(resp);
+        scheduleRefresh(resp.next_refresh_millis);
+      } catch (err) {
+        reportError(err);
+      }
+    }, ms);
+  }
+  api("GET", "/api/config").then((cfg) => scheduleRefresh(cfg.next_refresh_millis)).catch(() => {});
 })();
 </script>
 </body>

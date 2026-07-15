@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uplang/tsvsheet.go/internal/refresh"
 	"github.com/uplang/tsvsheet.go/internal/serve"
 	"github.com/uplang/tsvsheet.go/internal/session"
 	"github.com/uplang/tsvsheet.go/internal/sheet"
@@ -32,7 +33,7 @@ func testServer(t *testing.T) (serve.Server, *bool) {
 	sess, err := session.New(sampleSheet)
 	require.NoError(t, err)
 	saved := false
-	return serve.NewServer(sess, func() error { saved = true; return nil }, 0), &saved
+	return serve.NewServer(sess, func() error { saved = true; return nil }, nil), &saved
 }
 
 // do issues a request against a server's handler and returns the recorder.
@@ -110,7 +111,7 @@ func TestSave_Error(t *testing.T) {
 
 	sess, err := session.New(sampleSheet)
 	require.NoError(t, err)
-	srv := serve.NewServer(sess, func() error { return errors.New("disk full") }, 0)
+	srv := serve.NewServer(sess, func() error { return errors.New("disk full") }, nil)
 
 	rec := do(t, srv, http.MethodPost, "/api/save", "")
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
@@ -228,7 +229,7 @@ func TestEmbedded_OK(t *testing.T) {
 	}
 	sess, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root")
 	require.NoError(t, err)
-	srv := serve.NewServer(sess, func() error { return nil }, 0)
+	srv := serve.NewServer(sess, func() error { return nil }, nil)
 
 	rec := do(t, srv, http.MethodGet, "/api/embedded?cell=A1", "")
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -264,11 +265,24 @@ func TestConfig_RefreshMillis(t *testing.T) {
 
 	sess, err := session.New([]byte("=now()\n"))
 	require.NoError(t, err)
-	srv := serve.NewServer(sess, func() error { return nil }, 2*time.Second)
+	srv := serve.NewServer(sess, func() error { return nil }, refresh.Every(2*time.Second))
 
 	rec := do(t, srv, http.MethodGet, "/api/config", "")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), `"refresh_millis":2000`)
+	assert.Contains(t, rec.Body.String(), `"next_refresh_millis":2000`)
+}
+
+func TestConfig_NoRefresh(t *testing.T) {
+	t.Parallel()
+
+	// A nil cadence and a zero cadence both report no next refresh.
+	srv, _ := testServer(t) // nil refresh
+	assert.Contains(t, do(t, srv, http.MethodGet, "/api/config", "").Body.String(), `"next_refresh_millis":0`)
+
+	sess, err := session.New(sampleSheet)
+	require.NoError(t, err)
+	zero := serve.NewServer(sess, func() error { return nil }, refresh.Every(0))
+	assert.Contains(t, do(t, zero, http.MethodGet, "/api/config", "").Body.String(), `"next_refresh_millis":0`)
 }
 
 func TestRecompute_ReturnsFreshState(t *testing.T) {

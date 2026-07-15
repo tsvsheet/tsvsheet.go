@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/uplang/tsvsheet.go/internal/constants"
+	"github.com/uplang/tsvsheet.go/internal/refresh"
 	"github.com/uplang/tsvsheet.go/internal/session"
 	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
@@ -22,13 +23,26 @@ type Saver func() error
 type Server struct {
 	session *session.Session
 	save    Saver
-	refresh time.Duration
+	refresh refresh.Next
 }
 
 // NewServer builds a server over a session, a save function, and an auto-refresh
-// interval (0 disables periodic recomputation of volatile cells).
-func NewServer(s *session.Session, save Saver, refresh time.Duration) Server {
-	return Server{session: s, save: save, refresh: refresh}
+// cadence (nil disables periodic recomputation of volatile cells).
+func NewServer(s *session.Session, save Saver, next refresh.Next) Server {
+	return Server{session: s, save: save, refresh: next}
+}
+
+// nextRefreshMillis is the delay until the next auto-refresh, in milliseconds
+// (0 = none) — evaluated now, so an isnow schedule reports its next occurrence.
+func (srv Server) nextRefreshMillis() int {
+	if srv.refresh == nil {
+		return 0
+	}
+	d := srv.refresh(time.Now())
+	if d <= 0 {
+		return 0
+	}
+	return int(d.Milliseconds())
 }
 
 // Handler returns the HTTP handler: the JSON API under /api/ and the embedded
@@ -48,21 +62,31 @@ func (srv Server) Handler() http.Handler {
 	return mux
 }
 
-// configResponse is the GET /api/config body: the auto-refresh interval in
-// milliseconds (0 = no periodic refresh).
+// configResponse is the GET /api/config body: the delay until the first
+// auto-refresh in milliseconds (0 = none).
 type configResponse struct {
-	RefreshMillis int `json:"refresh_millis"`
+	NextRefreshMillis int `json:"next_refresh_millis"`
 }
 
-// handleConfig returns the UI's static configuration (the refresh interval).
+// handleConfig returns the UI's initial configuration (the first refresh delay).
 func (srv Server) handleConfig(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, configResponse{RefreshMillis: int(srv.refresh.Milliseconds())})
+	writeJSON(w, http.StatusOK, configResponse{NextRefreshMillis: srv.nextRefreshMillis()})
+}
+
+// recomputeResponse is the POST /api/recompute body: the refreshed read model
+// plus the delay until the next refresh, so the UI reschedules itself.
+type recomputeResponse struct {
+	session.State
+	NextRefreshMillis int `json:"next_refresh_millis"`
 }
 
 // handleRecompute re-evaluates the sheet against the current clock (refreshing
-// volatile cells) and returns the new state.
+// volatile cells) and returns the new state and the next refresh delay.
 func (srv Server) handleRecompute(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, srv.session.Recompute())
+	writeJSON(w, http.StatusOK, recomputeResponse{
+		State:             srv.session.Recompute(),
+		NextRefreshMillis: srv.nextRefreshMillis(),
+	})
 }
 
 // handleState returns the current spreadsheet read model.

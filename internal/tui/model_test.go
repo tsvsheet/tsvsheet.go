@@ -3,13 +3,42 @@ package tui
 import (
 	"regexp"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uplang/tsvsheet.go/internal/refresh"
 	"github.com/uplang/tsvsheet.go/internal/session"
 )
+
+func TestModel_AutoRefreshTick(t *testing.T) {
+	t.Parallel()
+
+	s, err := session.New([]byte("=now()\n"))
+	require.NoError(t, err)
+
+	// A cadence arms the tick on Init and re-arms on each tick.
+	live := New(s, nil, refresh.Every(time.Millisecond))
+	armed := live.Init()
+	require.NotNil(t, armed)
+	_, isTick := armed().(tickMsg) // running the Cmd yields a tickMsg
+	assert.True(t, isTick)
+
+	_, cmd := live.Update(tickMsg(time.Now())) // nav mode → recompute + re-arm
+	require.NotNil(t, cmd)
+
+	// In edit mode a tick skips recomputation but still re-arms.
+	editing := New(s, nil, refresh.Every(time.Millisecond))
+	editing.mode = modeEdit
+	_, editCmd := editing.Update(tickMsg(time.Now()))
+	require.NotNil(t, editCmd)
+
+	// No cadence → no tick; an exhausted cadence (0 delay) → no tick.
+	assert.Nil(t, New(s, nil, nil).Init())
+	assert.Nil(t, New(s, nil, refresh.Every(0)).tick())
+}
 
 // sampleSheet is a small spreadsheet whose D column holds a formula, so the
 // grid exercises both literal and formula cell styling.
@@ -22,7 +51,7 @@ func newModel(t *testing.T, save Saver) Model {
 	t.Helper()
 	s, err := session.New(sampleSheet)
 	require.NoError(t, err)
-	return New(s, save)
+	return New(s, save, nil)
 }
 
 // press feeds a key string to the model and returns the updated model.
@@ -292,7 +321,7 @@ func TestView_DirtyAndDiagnostics(t *testing.T) {
 
 	s, err := session.New([]byte("=bogus(A1)\n")) // unknown func → diagnostic
 	require.NoError(t, err)
-	m := New(s, nil)
+	m := New(s, nil, nil)
 	assert.Contains(t, stripANSI(m.View()), "diagnostic")
 
 	m = press(t, m, "enter")
@@ -307,7 +336,7 @@ func TestView_ErrorCircAndLongValues(t *testing.T) {
 	// #REF!, #CIRC!, and a long literal exercise the error and clip styling.
 	s, err := session.New([]byte("=Z99\t=A2+1\t1234567890\n=B1+1\t5\t6\n"))
 	require.NoError(t, err)
-	view := stripANSI(New(s, nil).View())
+	view := stripANSI(New(s, nil, nil).View())
 	assert.Contains(t, view, "#REF!")
 	assert.Contains(t, view, "#CIRC!")
 	assert.Contains(t, view, "…") // clipped long value
@@ -318,7 +347,7 @@ func TestEmptyGrid(t *testing.T) {
 
 	s, err := session.New([]byte(""))
 	require.NoError(t, err)
-	m := New(s, nil)
+	m := New(s, nil, nil)
 	assert.Equal(t, 1, m.width())
 	assert.Equal(t, 1, m.height())
 	assert.NotEmpty(t, stripANSI(m.View()))
