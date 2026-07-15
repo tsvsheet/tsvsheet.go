@@ -18,6 +18,8 @@ tsvsheet render examples/invoice.tsvt | column -t
 | [grades](grades.tsvt) | Per-row aggregates (`round(avg(B2:D2), 1)`) and a conditional text result (`if(E2 >= 70, "Pass", "Fail")`) that reads the average computed earlier in the same row. |
 | [invoice](invoice.tsvt) | Per-row arithmetic (`Amount = Qty × Price`, `=B2*C2`) and a `Total` row summing the amount column over a range (`=sum(D2:D5)`). |
 | [math](math.tsvt) | Error-value propagation: dividing by a zero denominator yields `#DIV/0!`, which flows through any expression that reads the cell. |
+| [squares](squares.tsvt) | The power operator (`=A2^2`, `=A2^3`) building square and cube columns, over a `Total` row that sums each column across a range (`=sum(B2:B6)`). |
+| [weather](weather.tsvt) | Per-row differences (`Range = High − Low`, `=B2-C2`) and a `Peak` summary row reducing a column with `max`/`min` (`=max(B2:B6)`, `=min(C2:C6)`). |
 
 ## A note on the language
 
