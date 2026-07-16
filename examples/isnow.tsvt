@@ -1,0 +1,87 @@
+ISNOW PATTERN SHOWCASE	ISNOW("pat") is TRUE when the isnow pattern holds at the current clock — the column changes every recompute; patterns are verbatim from the uplang/isnow conformance corpus
+Pattern	Holds now?	Means
+--- SYMBOLS: WEEKDAY NAMES (case-insensitive, minimal-unique) ---
+M noon	=isnow("M noon")	Monday at 12:00:00
+Tu noon	=isnow("Tu noon")	Tuesday at noon
+Th noon	=isnow("Th noon")	Thursday at noon
+Su noon	=isnow("Su noon")	Sunday at noon
+monday noon	=isnow("monday noon")	case-insensitive: same as "M noon"
+Wednesday noon	=isnow("Wednesday noon")	full weekday name also resolves
+MWF noon	=isnow("MWF noon")	the run Mon/Wed/Fri, at noon
+SS noon	=isnow("SS noon")	the weekend run (Sat+Sun), at noon
+TT noon	=isnow("TT noon")	the run Tue+Thu, at noon
+M	=isnow("M")	Monday — every minute (bare weekday leaves time wild)
+Sa	=isnow("Sa")	Saturday — every minute
+Su	=isnow("Su")	Sunday — every minute
+*/*/* 2 12:00	=isnow("*/*/* 2 12:00")	numeric weekday 2 = Monday (Sun=1); numeric form needs all three groups
+*/*/* 7 12:00	=isnow("*/*/* 7 12:00")	numeric weekday 7 = Saturday, at 12:00
+--- SYMBOLS: TIME NAMES ---
+noon	=isnow("noon")	12:00:00
+midnight	=isnow("midnight")	00:00:00
+midday	=isnow("midday")	synonym for noon
+mn	=isnow("mn")	abbreviation for midnight
+md	=isnow("md")	abbreviation for midday
+n	=isnow("n")	unique prefix of the three time words: noon
+--- STRUCTURE: THE SHORTHAND LADDER (short pattern -> canonical form) ---
+6	=isnow("6")	bare hour: 06:00:00 daily
+/1 18	=isnow("/1 18")	the 1st of any month at 18:00
+Su :0,30	=isnow("Su :0,30")	Sundays at :00 and :30 of every hour
+12/-1 0	=isnow("12/-1 0")	last day of December at 00:00
+2000// ::0+[5]	=isnow("2000// ::0+[5]")	year 2000, every 5th second
+*	=isnow("*")	the bare star: every minute
+12/25	=isnow("12/25")	December 25, every minute that day
+:0,30	=isnow(":0,30")	minute set :00 and :30 — hour left wild
+2026//	=isnow("2026//")	any instant in the year 2026
+7/14	=isnow("7/14")	one slash = month/day: July 14
+2 :30	=isnow("2 :30")	a bare number fills the empty hour slot: 02:30
+M.noon	=isnow("M.noon")	"." is a group separator: same as "M noon"
+M_noon	=isnow("M_noon")	"_" is a group separator too
+" 6 "	=isnow(" 6 ")	surrounding separators tolerated (a pattern is one shell-safe token)
+M,W,F noon	=isnow("M,W,F noon")	weekday set Mon/Wed/Fri, at noon
+*/*/15 4 12:00	=isnow("*/*/15 4 12:00")	day 15 AND weekday 4 (Wed) — fields AND together
+*/*/15 5 12:00	=isnow("*/*/15 5 12:00")	day 15 AND weekday 5 (Thu) — both must hold
+*/*/* 2-6 12:00	=isnow("*/*/* 2-6 12:00")	numeric weekday span Mon–Fri, at 12:00
+*/*/* 2+[1] 12:00	=isnow("*/*/* 2+[1] 12:00")	numeric-weekday step: 1st Monday, at 12:00
+--- FIELD ALGEBRA: WILDCARD, EXACT, SET, EXCLUSION, SPAN, FROM-END, STEP ---
+*/*/* * *:00:00	=isnow("*/*/* * *:00:00")	wildcard hour: every hour, on the hour
+2026// *:*:00	=isnow("2026// *:*:00")	exact year 2026, every minute
+/1,4,7,10/ *:*:00	=isnow("/1,4,7,10/ *:*:00")	month set Jan/Apr/Jul/Oct, every minute
+:00,15,30,45	=isnow(":00,15,30,45")	minute set: every quarter hour
+/!1 *:*:00	=isnow("/!1 *:*:00")	field exclusion: every day except the 1st
+8-12	=isnow("8-12")	hour span 08–12 inclusive, on the hour
+M-F noon	=isnow("M-F noon")	weekday span Monday–Friday, at noon
+22-2	=isnow("22-2")	hour span that wraps midnight: 22:00–02:00
+*/*/29-* *:*:00	=isnow("*/*/29-* *:*:00")	day span open at the top: the 29th onward
+*/*/-1 *:*:00	=isnow("*/*/-1 *:*:00")	from-end: the last day of the month
+*/12/-15 *:*:00	=isnow("*/12/-15 *:*:00")	the last 15 days of December
+*/12/-2w1d *:*:00	=isnow("*/12/-2w1d *:*:00")	from-end unit compound: last 2 weeks 1 day of December
+:0+[15]	=isnow(":0+[15]")	step: every 15 minutes from :00
+::+[9]	=isnow("::+[9]")	step: every 9 seconds
+:-[15]	=isnow(":-[15]")	descending minute step counted from the end: :59, :44, :29, :14
+Monday+[3] noon	=isnow("Monday+[3] noon")	the 3rd Monday of the month, at noon
+11/ Th-[1] noon	=isnow("11/ Th-[1] noon")	the last Thursday of November, at noon
+M+[1,3] noon	=isnow("M+[1,3] noon")	the 1st and 3rd Monday, at noon
+/+[3w] noon	=isnow("/+[3w] noon")	week-granular: every 3rd week of the year, at noon
+M+[1],W+[2] noon	=isnow("M+[1],W+[2] noon")	set distributes the step: 1st Monday and 2nd Wednesday, at noon
+M-F-[1] noon	=isnow("M-F-[1] noon")	weekday-span BYSETPOS: last business day of the month, at noon
+M-F+[1] noon	=isnow("M-F+[1] noon")	first business day of the month, at noon
+--- INTERVALS: "EVERY N UNITS", CROSSING FIELD BOUNDARIES ---
++[90mn]	=isnow("+[90mn]")	every 90 minutes (re-aligns at the day boundary)
++[2h]	=isnow("+[2h]")	every 2 hours
++[3d]	=isnow("+[3d]")	every 3 days (week-anchored)
++[25h]	=isnow("+[25h]")	every 25 hours (walks across the week)
++[10d]	=isnow("+[10d]")	every 10 days within the month
++[40d]	=isnow("+[40d]")	every 40 days within the year
++[30s]	=isnow("+[30s]")	every 30 seconds
+M-F +[90mn] >=6 <=18	=isnow("M-F +[90mn] >=6 <=18")	every 90 min, weekdays only, 06:00–18:00 (interval ANDed with weekday + bounds)
+--- PATTERN-LEVEL EXCLUSIONS: "! spec" CARVES INSTANTS OUT ---
+M-F ! 12/25	=isnow("M-F ! 12/25")	every weekday except December 25
+noon ! 12/25 ! 1/1	=isnow("noon ! 12/25 ! 1/1")	noon daily, except Christmas and New Year's (a holiday list)
+noon ! 12/25	=isnow("noon ! 12/25")	noon daily, except December 25
+M-F !12/25	=isnow("M-F !12/25")	no space: "!12/25" binds as a field exclusion, NOT a whole-day skip
+--- BOUNDS & WINDOWS: SINCE (>, >=) / UNTIL (<, <=) ---
+12 >=2011	=isnow("12 >=2011")	hour 12, only from year 2011 onward
+12 <9/1	=isnow("12 <9/1")	hour 12 daily, until September 1 (exclusive)
+::+[9] >=6 <=18	=isnow("::+[9] >=6 <=18")	every 9 seconds, within the 06:00–18:00 window
+12 >=2011 <2016	=isnow("12 >=2011 <2016")	hour 12, bounded to years 2011–2015
+::+[7] >=6 <=7	=isnow("::+[7] >=6 <=7")	continuous stepping: every 7 seconds in 06:00–07:00, restarting each day
