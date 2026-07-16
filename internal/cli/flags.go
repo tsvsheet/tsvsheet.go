@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // stdin is indirected so tests can substitute an input stream.
@@ -46,5 +48,14 @@ func streamAction(fn func(Streams, positional) error) cli.ActionFunc {
 	return func(_ context.Context, c *cli.Command) error {
 		streams := Streams{In: stdin, Out: c.Root().Writer, Err: stderr}
 		return fn(streams, positional(c.Args().Slice()))
+	}
+}
+
+// limitedAction is streamAction that also injects the resource limits selected
+// by the global --max-cells flag, for the commands that compute a sheet.
+func limitedAction(fn func(Streams, positional, sheet.Limits) error) cli.ActionFunc {
+	return func(_ context.Context, c *cli.Command) error {
+		streams := Streams{In: stdin, Out: c.Root().Writer, Err: stderr}
+		return fn(streams, positional(c.Args().Slice()), maxCellsLimits(c))
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uplang/tsvsheet.go/internal/constants"
+	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // sampleSheet is a single-file spreadsheet: two data columns and a C-column
@@ -41,7 +42,7 @@ func TestRunRender_ComputesFromStdin(t *testing.T) {
 	t.Parallel()
 
 	streams, out, _ := streamsWith(sampleSheet)
-	require.NoError(t, runRender(streams, "-", false))
+	require.NoError(t, runRender(streams, "-", false, sheet.DefaultLimits()))
 	assert.Equal(t, "2\t3\t5\n4\t5\t9\n", out.String())
 }
 
@@ -50,7 +51,7 @@ func TestRunRender_ReadsFile(t *testing.T) {
 
 	path := writeTemp(t, "s.tsvt", sampleSheet)
 	streams, out, _ := streamsWith("")
-	require.NoError(t, runRender(streams, sourcePath(path), false))
+	require.NoError(t, runRender(streams, sourcePath(path), false, sheet.DefaultLimits()))
 	assert.Contains(t, out.String(), "\t5\n")
 }
 
@@ -58,7 +59,7 @@ func TestRunRender_FileMissing(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("")
-	err := runRender(streams, "/no/such.tsvt", false)
+	err := runRender(streams, "/no/such.tsvt", false, sheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }
@@ -67,7 +68,7 @@ func TestRunRender_SyntaxError(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("1\t=sum(\n")
-	err := runRender(streams, "-", false)
+	err := runRender(streams, "-", false, sheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrSyntax)
 }
@@ -76,7 +77,7 @@ func TestRunRender_WriteError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: strings.NewReader(sampleSheet), Out: failWriter{}, Err: &bytes.Buffer{}}
-	err := runRender(streams, "-", false)
+	err := runRender(streams, "-", false, sheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrWriteFile)
 }
@@ -196,7 +197,7 @@ func TestRunParse_JSON(t *testing.T) {
 	// The source grid is emitted verbatim as "rows"; without --value there is
 	// no "values".
 	streams, out, _ := streamsWith("a\t\t=A1\n")
-	require.NoError(t, runParse(streams, "-", false, false))
+	require.NoError(t, runParse(streams, "-", false, false, sheet.DefaultLimits()))
 	body := out.String()
 	assert.Contains(t, body, `"rows"`)
 	assert.Contains(t, body, `"=A1"`)
@@ -208,7 +209,7 @@ func TestRunParse_WithValues(t *testing.T) {
 
 	// --value adds the computed grid.
 	streams, out, _ := streamsWith("2\t=A1*10\n")
-	require.NoError(t, runParse(streams, "-", true, false))
+	require.NoError(t, runParse(streams, "-", true, false, sheet.DefaultLimits()))
 	body := out.String()
 	assert.Contains(t, body, `"values"`)
 	assert.Contains(t, body, `"20"`) // A1*10 = 20
@@ -244,7 +245,7 @@ func TestRunParse_SyntaxError(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("1\t=sum(\n")
-	err := runParse(streams, "-", false, false)
+	err := runParse(streams, "-", false, false, sheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrSyntax)
 }
@@ -253,7 +254,7 @@ func TestRunParse_FileMissing(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("")
-	err := runParse(streams, "/no/such.tsvt", false, false)
+	err := runParse(streams, "/no/such.tsvt", false, false, sheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }

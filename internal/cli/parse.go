@@ -24,7 +24,13 @@ type valueOutput bool
 // runParse parses a spreadsheet and writes its source grid as JSON — a stable,
 // jq-friendly, round-trippable surface (see from-json). With isValues, the
 // computed grid is included too (the sheet is evaluated, resolving embeds).
-func runParse(streams Streams, source sourcePath, isValues valueOutput, isUnconfined pathAccess) error {
+func runParse(
+	streams Streams,
+	source sourcePath,
+	isValues valueOutput,
+	isUnconfined pathAccess,
+	limits sheet.Limits,
+) error {
 	reader, release, err := source.open(streams.In)
 	if err != nil {
 		return err
@@ -37,7 +43,7 @@ func runParse(streams Streams, source sourcePath, isValues valueOutput, isUnconf
 	}
 	view := sheetView{Rows: parsed.Source()}
 	if isValues {
-		view.Values = parsed.ComputeWith(computeOptions(source, isUnconfined))
+		view.Values = parsed.ComputeWith(computeOptions(source, isUnconfined, limits))
 	}
 	return writeJSON(streams.Out, view)
 }
@@ -85,8 +91,8 @@ Examples:
 			},
 			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
 		},
-		Action: streamAction(func(s Streams, args positional) error {
-			return runParse(s, args.at(0), valueOutput(isValues), pathAccess(isUnconfined))
+		Action: limitedAction(func(s Streams, args positional, limits sheet.Limits) error {
+			return runParse(s, args.at(0), valueOutput(isValues), pathAccess(isUnconfined), limits)
 		}),
 	}
 }

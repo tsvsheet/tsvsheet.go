@@ -22,14 +22,17 @@ const (
 // the same state. now is the wall clock sampled once for the pass (volatile
 // functions).
 type computer struct {
-	env   embedEnv
-	now   time.Time
-	sheet Sheet
-	cache [][]Value
-	phase [][]cellPhase
+	env    embedEnv
+	now    time.Time
+	sheet  Sheet
+	cache  [][]Value
+	phase  [][]cellPhase
+	limits Limits
 }
 
-// newComputer builds a computer sized to the sheet, with the pass clock.
+// newComputer builds a computer sized to the sheet, with the pass clock and the
+// engine's generous DefaultLimits (the plain Compute/ComputeAt path); the
+// embedding path (ComputeWith) overrides them with the injected limits.
 func newComputer(s Sheet, now time.Time) computer {
 	cache := make([][]Value, len(s.cells))
 	phase := make([][]cellPhase, len(s.cells))
@@ -37,7 +40,7 @@ func newComputer(s Sheet, now time.Time) computer {
 		cache[r] = make([]Value, len(row))
 		phase[r] = make([]cellPhase, len(row))
 	}
-	return computer{now: now, sheet: s, cache: cache, phase: phase}
+	return computer{now: now, sheet: s, cache: cache, phase: phase, limits: DefaultLimits()}
 }
 
 // cellValue is a cell's evaluated Value: a literal parsed, a formula computed

@@ -83,6 +83,16 @@ func TestText_ErrorsAndEdges(t *testing.T) {
 	}
 }
 
+func TestText_ReptLazyDispatch(t *testing.T) {
+	t.Parallel()
+
+	// REPT dispatches lazily so it can read the injected byte budget; its arity
+	// and error-propagation contract matches the former eager path.
+	assert.Equal(t, string(sheet.ErrValue), formula1(t, `rept("a")`))       // wrong arity → #VALUE!
+	assert.Equal(t, string(sheet.ErrValue), formula1(t, `rept("a", 1, 2)`)) // wrong arity → #VALUE!
+	assert.Equal(t, string(sheet.ErrDiv), formula1(t, "rept(1/0, 2)"))      // an argument error propagates
+}
+
 func TestText_NonNumericCountArgs(t *testing.T) {
 	t.Parallel()
 

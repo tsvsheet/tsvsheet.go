@@ -36,23 +36,28 @@ type ComputeOptions struct {
 	At     time.Time
 	Loader Loader
 	Base   Path
+	Limits Limits
 }
 
 // ComputeWith computes the sheet with an injected sheet loader, so SHEET(...)
-// cells embed other sheets. The sheet's own Base path seeds cycle detection.
+// cells embed other sheets. The sheet's own Base path seeds cycle detection; the
+// injected Limits (or DefaultLimits when unset) bound every allocation.
 func (s Sheet) ComputeWith(opts ComputeOptions) Grid {
 	env := embedEnv{
 		loader:   opts.Loader,
 		base:     opts.Base,
 		visiting: map[Path]boolResult{opts.Base: true},
 	}
-	return s.computeGrid(newEmbedComputer(s, opts.At, env))
+	return s.computeGrid(newEmbedComputer(s, opts.At, env, effectiveLimits(opts.Limits)))
 }
 
-// newEmbedComputer is newComputer with an embedding environment attached.
-func newEmbedComputer(s Sheet, now time.Time, env embedEnv) computer {
+// newEmbedComputer is newComputer with an embedding environment and the injected
+// resource limits attached; embedded and foreign child computers inherit the
+// parent's limits so a nested sheet cannot escape the ceiling.
+func newEmbedComputer(s Sheet, now time.Time, env embedEnv, limits Limits) computer {
 	c := newComputer(s, now)
 	c.env = env
+	c.limits = limits
 	return c
 }
 
@@ -142,15 +147,16 @@ func (s Sheet) EmbeddedGrid(at Address, opts ComputeOptions) (Path, Grid, bool) 
 		return "", nil, false
 	}
 	visiting := map[Path]boolResult{opts.Base: true}
+	limits := effectiveLimits(opts.Limits)
 	root := resolver{
-		comp: newEmbedComputer(s, opts.At, embedEnv{loader: opts.Loader, base: opts.Base, visiting: visiting}),
+		comp: newEmbedComputer(s, opts.At, embedEnv{loader: opts.Loader, base: opts.Base, visiting: visiting}, limits),
 	}
 	sub, path, inputs, _, ok := root.sheetTarget(call.Args)
 	if !ok {
 		return "", nil, false
 	}
 	child := embedEnv{loader: opts.Loader, base: path, args: inputs, visiting: withPath(visiting, path)}
-	return path, sub.computeGrid(newEmbedComputer(sub, opts.At, child)), true
+	return path, sub.computeGrid(newEmbedComputer(sub, opts.At, child, limits)), true
 }
 
 // topLevelSheetCall reports whether a formula is a bare SHEET(...) call and
@@ -172,7 +178,7 @@ func (r resolver) embed(sub Sheet, path Path, inputs []Value) Value {
 		base:     path,
 		args:     inputs,
 		visiting: withPath(r.comp.env.visiting, path),
-	})
+	}, r.comp.limits)
 	return child.read(rowIndex(out.Row), colIndex(out.Col))
 }
 

@@ -52,6 +52,18 @@ func TestRunTUI_ProgramError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestRunTUI_BadRefreshSpec(t *testing.T) {
+	t.Parallel()
+
+	// A malformed --refresh-interval fails before the program runs: runTUI
+	// surfaces the buildRefresh error rather than starting the editor.
+	err := runTUI(
+		Streams{In: strings.NewReader(""), Out: &bytes.Buffer{}, Err: &bytes.Buffer{}},
+		tuiConfig{source: sheetFile(t), refresh: "garbage!!!"},
+	)
+	require.Error(t, err)
+}
+
 func TestTUICommand_Integration(t *testing.T) {
 	withRunProgram(t, func(tea.Model, io.Reader, io.Writer) error { return nil })
 

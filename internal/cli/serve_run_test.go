@@ -11,6 +11,7 @@ import (
 
 	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/session"
+	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 func TestBuildRefresh(t *testing.T) {
@@ -92,7 +93,7 @@ func TestSaver_WritesFile(t *testing.T) {
 	t.Parallel()
 
 	source := sheetFile(t)
-	sess, _, err := loadEditable(source, false)
+	sess, _, err := loadEditable(source, false, sheet.DefaultLimits())
 	require.NoError(t, err)
 
 	require.NoError(t, saver(sess, source)())
@@ -106,7 +107,7 @@ func TestSaver_WriteError(t *testing.T) {
 	t.Parallel()
 
 	source := sheetFile(t)
-	sess, _, err := loadEditable(source, false)
+	sess, _, err := loadEditable(source, false, sheet.DefaultLimits())
 	require.NoError(t, err)
 
 	// A directory path cannot be written as a file.

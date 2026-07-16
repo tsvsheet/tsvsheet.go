@@ -252,14 +252,15 @@ func (s Sheet) Source() Grid {
 }
 
 // Set returns a new sheet with the cell at addr replaced by text (a literal or
-// a formula), growing the grid to reach an out-of-bounds position. A malformed
-// formula is a syntax error and the sheet is unchanged (Set is immutable, so
-// the caller simply keeps the old value).
-func (s Sheet) Set(addr Address, text string) (Sheet, error) {
+// a formula), growing the grid to reach an out-of-bounds position. The injected
+// limits bound how far the grid may grow. A malformed formula is a syntax error
+// and the sheet is unchanged (Set is immutable, so the caller simply keeps the
+// old value).
+func (s Sheet) Set(addr Address, text string, limits Limits) (Sheet, error) {
 	if addr.Row < 0 || addr.Col < 0 {
 		return Sheet{}, constants.ErrInvalidValue.With(nil, "address", addr.String())
 	}
-	if addr.Row >= active.GridDim || addr.Col >= active.GridDim {
+	if addr.Row >= limits.GridDim || addr.Col >= limits.GridDim {
 		return Sheet{}, constants.ErrInvalidValue.With(nil, "address exceeds the grid limit", addr.String())
 	}
 	parsed, err := parseCell(textVal(text), rowIndex(addr.Row), colIndex(addr.Col))

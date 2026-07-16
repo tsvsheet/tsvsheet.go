@@ -34,7 +34,7 @@ func TestSet_LiteralInPlace(t *testing.T) {
 	s, err := sheet.Parse([]byte("1\t2\n"))
 	require.NoError(t, err)
 
-	next, err := s.Set(sheet.Address{Row: 0, Col: 0}, "9")
+	next, err := s.Set(sheet.Address{Row: 0, Col: 0}, "9", sheet.DefaultLimits())
 	require.NoError(t, err)
 
 	// The new sheet reflects the edit; the original is unchanged (immutable Set).
@@ -49,7 +49,7 @@ func TestSet_FormulaComputes(t *testing.T) {
 	s, err := sheet.Parse([]byte("2\t3\n"))
 	require.NoError(t, err)
 
-	next, err := s.Set(sheet.Address{Row: 0, Col: 1}, "=A1*10")
+	next, err := s.Set(sheet.Address{Row: 0, Col: 1}, "=A1*10", sheet.DefaultLimits())
 	require.NoError(t, err)
 	assert.Equal(t, "=A1*10", next.Source()[0][1])
 	assert.Equal(t, "20", next.Compute()[0][1])
@@ -63,7 +63,7 @@ func TestSet_GrowsGrid(t *testing.T) {
 
 	// Write well beyond the current bounds: new rows and new columns appear,
 	// padded with empty cells.
-	next, err := s.Set(sheet.Address{Row: 2, Col: 3}, "x")
+	next, err := s.Set(sheet.Address{Row: 2, Col: 3}, "x", sheet.DefaultLimits())
 	require.NoError(t, err)
 
 	src := next.Source()
@@ -80,7 +80,7 @@ func TestSet_MalformedFormulaIsSyntaxError(t *testing.T) {
 	s, err := sheet.Parse([]byte("1\n"))
 	require.NoError(t, err)
 
-	_, err = s.Set(sheet.Address{Row: 0, Col: 0}, "=sum(")
+	_, err = s.Set(sheet.Address{Row: 0, Col: 0}, "=sum(", sheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrSyntax)
 }
@@ -93,7 +93,7 @@ func TestSet_KeepsOtherRows(t *testing.T) {
 	s, err := sheet.Parse([]byte("1\n2\n3\n"))
 	require.NoError(t, err)
 
-	next, err := s.Set(sheet.Address{Row: 0, Col: 0}, "9")
+	next, err := s.Set(sheet.Address{Row: 0, Col: 0}, "9", sheet.DefaultLimits())
 	require.NoError(t, err)
 
 	src := next.Source()
@@ -109,15 +109,15 @@ func TestSet_RejectsNegativeAddress(t *testing.T) {
 	s, err := sheet.Parse([]byte("1\n"))
 	require.NoError(t, err)
 
-	_, err = s.Set(sheet.Address{Row: -1, Col: 0}, "x")
+	_, err = s.Set(sheet.Address{Row: -1, Col: 0}, "x", sheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidValue)
 
 	// An address beyond the grid limit is rejected before growing (OOM guard).
-	_, err = s.Set(sheet.Address{Row: 2_000_000, Col: 0}, "x")
+	_, err = s.Set(sheet.Address{Row: 2_000_000, Col: 0}, "x", sheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidValue)
-	_, err = s.Set(sheet.Address{Row: 0, Col: 2_000_000}, "x")
+	_, err = s.Set(sheet.Address{Row: 0, Col: 2_000_000}, "x", sheet.DefaultLimits())
 	assert.ErrorIs(t, err, constants.ErrInvalidValue)
 }
 

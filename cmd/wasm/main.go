@@ -21,8 +21,7 @@ import (
 var state *session.Session
 
 func main() {
-	sheet.SetLimits(sheet.BrowserLimits) // tighter OOM ceilings, sized for a browser tab
-	state, _ = session.New([]byte(""))   // start empty; load() replaces it
+	state, _ = newSession([]byte("")) // start empty; load() replaces it
 
 	obj := js.Global().Get("Object").New()
 	obj.Set("load", js.FuncOf(load))
@@ -35,6 +34,13 @@ func main() {
 	js.Global().Set("tsvsheet", obj)
 
 	select {} // keep the Go runtime alive for the callbacks
+}
+
+// newSession builds an in-browser editing session with the tighter
+// BrowserLimits (OOM ceilings sized for a browser tab) and no sheet loader —
+// the browser has no filesystem, so SHEET(…)/"file"! references resolve to #REF!.
+func newSession(src []byte) (*session.Session, error) {
+	return session.NewEmbeddable(src, nil, "", sheet.BrowserLimits())
 }
 
 // snapshotJSON marshals the current read model.
@@ -52,7 +58,7 @@ func errJSON(err error) any {
 // load parses a whole .tsvt document into the session, returning the new state
 // or an {"error"} on a formula syntax error.
 func load(_ js.Value, args []js.Value) any {
-	s, err := session.New([]byte(args[0].String()))
+	s, err := newSession([]byte(args[0].String()))
 	if err != nil {
 		return errJSON(err)
 	}

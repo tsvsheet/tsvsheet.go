@@ -2,14 +2,18 @@ package cli
 
 import (
 	"github.com/urfave/cli/v3"
+
+	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
-// tuiConfig binds the tui command's spreadsheet path, path-access mode, and
-// auto-refresh cadence (a duration or an isnow pattern; empty = auto).
+// tuiConfig binds the tui command's spreadsheet path, path-access mode,
+// auto-refresh cadence (a duration or an isnow pattern; empty = auto), and the
+// resource limits the editing session enforces.
 type tuiConfig struct {
 	source       sourcePath
 	refresh      string
 	isUnconfined pathAccess
+	limits       sheet.Limits
 }
 
 // tuiCommand builds the `tui` command.
@@ -35,9 +39,10 @@ Examples:
 				Destination: &cfg.refresh,
 			},
 		},
-		Action: streamAction(func(s Streams, args positional) error {
+		Action: limitedAction(func(s Streams, args positional, limits sheet.Limits) error {
 			cfg.source = args.at(0)
 			cfg.isUnconfined = pathAccess(isUnconfined)
+			cfg.limits = limits
 			return runTUI(s, cfg)
 		}),
 	}

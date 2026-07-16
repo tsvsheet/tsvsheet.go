@@ -360,10 +360,10 @@ func TestViewport_ShortSheetAndTinyWindow(t *testing.T) {
 func TestClampTop(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, 0, clampTop(5, -1))   // grid shorter than window → pin top
-	assert.Equal(t, 0, clampTop(-3, 10))  // negative offset → top
-	assert.Equal(t, 10, clampTop(15, 10)) // beyond the last page → last page
-	assert.Equal(t, 7, clampTop(7, 10))   // within range → unchanged
+	assert.Equal(t, scrollOffset(0), clampTop(5, -1))   // grid shorter than window → pin top
+	assert.Equal(t, scrollOffset(0), clampTop(-3, 10))  // negative offset → top
+	assert.Equal(t, scrollOffset(10), clampTop(15, 10)) // beyond the last page → last page
+	assert.Equal(t, scrollOffset(7), clampTop(7, 10))   // within range → unchanged
 }
 
 func TestInit(t *testing.T) {

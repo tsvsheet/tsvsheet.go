@@ -32,34 +32,53 @@ type Session struct {
 	sheet       sheet.Sheet
 	computed    sheet.Grid
 	diagnostics []sheet.Diagnostic
+	limits      sheet.Limits
 	mu          sync.Mutex
 	isDirty     bool
 }
 
 // New parses spreadsheet source and computes it eagerly, with no sheet loader —
-// SHEET(...) cells resolve to #REF!. It fails on a syntax error; the resulting
-// session is clean (not dirty).
+// SHEET(...) cells resolve to #REF! — and the engine's generous DefaultLimits.
+// It fails on a syntax error; the resulting session is clean (not dirty).
 func New(src []byte) (*Session, error) {
-	return NewEmbeddable(src, nil, "")
+	return NewEmbeddable(src, nil, "", sheet.DefaultLimits())
 }
 
-// NewEmbeddable is New with an injected sheet loader and this sheet's own path,
-// so SHEET(...) cells embed other sheets resolved through loader.
-func NewEmbeddable(src []byte, loader sheet.Loader, base sheet.Path) (*Session, error) {
+// NewEmbeddable is New with an injected sheet loader, this sheet's own path (so
+// SHEET(...) cells embed other sheets resolved through loader), and the resource
+// limits the session enforces on every compute and edit.
+func NewEmbeddable(src []byte, loader sheet.Loader, base sheet.Path, limits sheet.Limits) (*Session, error) {
 	parsed, err := sheet.Parse(src)
 	if err != nil {
 		return nil, err
 	}
-	s := &Session{sheet: parsed, loader: loader, base: base}
+	s := &Session{sheet: parsed, loader: loader, base: base, limits: withDefaults(limits)}
 	s.recompute()
 	return s, nil
 }
 
+// withDefaults resolves the injected limits, falling the zero value (an
+// unspecified Limits) back to the engine's generous DefaultLimits so a session
+// never enforces a degenerate zero grid dimension.
+func withDefaults(limits sheet.Limits) sheet.Limits {
+	if limits == (sheet.Limits{}) {
+		return sheet.DefaultLimits()
+	}
+	return limits
+}
+
 // recompute re-evaluates the current sheet and refreshes the read model. It uses
-// the injected loader (nil disables embedding) and samples the clock once.
+// the injected loader (nil disables embedding), the session limits, and samples
+// the clock once.
 func (s *Session) recompute() {
-	s.computed = s.sheet.ComputeWith(sheet.ComputeOptions{At: time.Now(), Loader: s.loader, Base: s.base})
+	s.computed = s.sheet.ComputeWith(s.computeOptions())
 	s.diagnostics = sheet.Check(s.sheet)
+}
+
+// computeOptions builds the compute options for this session: its loader, base
+// path, and resource limits, with the clock sampled at call time.
+func (s *Session) computeOptions() sheet.ComputeOptions {
+	return sheet.ComputeOptions{At: time.Now(), Loader: s.loader, Base: s.base, Limits: s.limits}
 }
 
 // SetCell edits one cell's source text (a literal or a formula) and recomputes.
@@ -68,7 +87,7 @@ func (s *Session) recompute() {
 func (s *Session) SetCell(at sheet.Address, text string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	updated, err := s.sheet.Set(at, text)
+	updated, err := s.sheet.Set(at, text, s.limits)
 	if err != nil {
 		return err
 	}
@@ -167,7 +186,7 @@ func (s *Session) References(addr sheet.Address) ([]sheet.Span, []sheet.Address)
 func (s *Session) Embedded(at sheet.Address) (sheet.Path, sheet.Grid, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	path, grid, ok := s.sheet.EmbeddedGrid(at, sheet.ComputeOptions{At: time.Now(), Loader: s.loader, Base: s.base})
+	path, grid, ok := s.sheet.EmbeddedGrid(at, s.computeOptions())
 	return path, grid, ok
 }
 

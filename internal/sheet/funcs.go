@@ -101,28 +101,57 @@ func (r resolver) evalCall(call tsvt.Call) Value {
 // errors and empties rather than have them short-circuited by the eager path.
 // ok is false for any other (eager) name.
 func (r resolver) evalLazy(name funcName, args []tsvt.Expr) (Value, boolResult) {
-	if v, ok := r.evalConditional(name, args); ok {
-		return v, true
+	for _, dispatch := range r.lazyDispatchers() {
+		if v, ok := dispatch(name, args); ok {
+			return v, true
+		}
 	}
-	if v, ok := r.evalClock(name, args); ok {
-		return v, true
+	return Value{}, false
+}
+
+// lazyDispatch resolves a lazy builtin by name: ok is false when the dispatcher
+// does not own the name.
+type lazyDispatch func(name funcName, args []tsvt.Expr) (Value, boolResult)
+
+// lazyDispatchers is the ordered set of lazy builtin dispatchers evalLazy tries;
+// the first that owns the name produces the value.
+func (r resolver) lazyDispatchers() []lazyDispatch {
+	return []lazyDispatch{
+		r.evalConditional,
+		r.evalClock,
+		r.evalTable,
+		r.evalCriteria,
+		r.evalArray,
+		r.evalText,
+		r.evalEmbed,
+		r.evalImport,
+		r.evalInspector,
 	}
-	if v, ok := r.evalTable(name, args); ok {
-		return v, true
+}
+
+// evalText dispatches the text builtins that must read an injected resource
+// limit — currently only REPT, whose result is bounded by the byte budget. ok is
+// false for any other name.
+func (r resolver) evalText(name funcName, args []tsvt.Expr) (Value, boolResult) {
+	if name != "rept" {
+		return Value{}, false
 	}
-	if v, ok := r.evalCriteria(name, args); ok {
-		return v, true
+	return r.evalRept(args), true
+}
+
+// evalRept evaluates REPT(text, count) lazily so it can bound its result by the
+// injected byte limit. Its observable behavior matches the former eager path: a
+// wrong arity or a propagated argument error short-circuits, then repeatText
+// applies the count and byte-budget checks.
+func (r resolver) evalRept(args []tsvt.Expr) Value {
+	if len(args) != 2 {
+		return errorValue(ErrValue)
 	}
-	if v, ok := r.evalArray(name, args); ok {
-		return v, true
+	values := r.argValues(args)
+	if bad, found := firstError(values); found {
+		return bad
 	}
-	if v, ok := r.evalEmbed(name, args); ok {
-		return v, true
-	}
-	if v, ok := r.evalImport(name, args); ok {
-		return v, true
-	}
-	return r.evalInspector(name, args)
+	return repeatText(values, byteBudget(r.comp.limits.ResultBytes))
 }
 
 // evalClock dispatches the volatile clock builtins TODAY and NOW, which read the
@@ -360,7 +389,6 @@ var functions = map[string]function{
 	"left":         {impl: fnLeft, minArgs: 1, maxArgs: 2},
 	"right":        {impl: fnRight, minArgs: 1, maxArgs: 2},
 	"mid":          {impl: fnMid, minArgs: 3, maxArgs: 3},
-	"rept":         {impl: fnRept, minArgs: 2, maxArgs: 2},
 	"exact":        {impl: fnExact, minArgs: 2, maxArgs: 2},
 	"t":            {impl: fnT, minArgs: 1, maxArgs: 1},
 	"concatenate":  {impl: fnConcatenate, minArgs: 1, maxArgs: -1},

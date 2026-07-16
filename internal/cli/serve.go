@@ -4,16 +4,20 @@ import (
 	"context"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // serveConfig binds the serve command's spreadsheet path, bind address,
-// path-access mode, and auto-refresh cadence (a duration or an isnow pattern).
+// path-access mode, auto-refresh cadence (a duration or an isnow pattern), and
+// the resource limits the editing session enforces.
 type serveConfig struct {
 	source       sourcePath
 	host         string
 	refresh      string
 	port         int
 	isUnconfined pathAccess
+	limits       sheet.Limits
 }
 
 // flagRefreshInterval sets the browser's auto-refresh cadence for volatile
@@ -67,6 +71,7 @@ Examples:
 		Action: func(ctx context.Context, c *cli.Command) error {
 			cfg.source = positional(c.Args().Slice()).at(0)
 			cfg.isUnconfined = pathAccess(isUnconfined)
+			cfg.limits = maxCellsLimits(c)
 			return runServe(ctx, cfg)
 		},
 	}

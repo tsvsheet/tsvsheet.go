@@ -51,7 +51,7 @@ const defaultRefresh = time.Second
 // loadServer reads the spreadsheet file into a session and builds the HTTP
 // server with a saver and the effective auto-refresh cadence.
 func loadServer(cfg serveConfig) (serve.Server, error) {
-	sess, persist, err := loadEditable(cfg.source, cfg.isUnconfined)
+	sess, persist, err := loadEditable(cfg.source, cfg.isUnconfined, cfg.limits)
 	if err != nil {
 		return serve.Server{}, err
 	}

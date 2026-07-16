@@ -35,7 +35,7 @@ func (r resolver) foreign(file string) (computer, foreignStatus) {
 		return computer{}, foreignCycle
 	}
 	child := embedEnv{loader: r.comp.env.loader, base: resolved, visiting: withPath(r.comp.env.visiting, resolved)}
-	return newEmbedComputer(sub, r.comp.now, child), foreignOK
+	return newEmbedComputer(sub, r.comp.now, child, r.comp.limits), foreignOK
 }
 
 // foreignCells resolves a `"file"!` reference to a cellset read from the target

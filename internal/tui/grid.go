@@ -54,18 +54,21 @@ func (m Model) scrollToCursor() Model {
 	} else if m.row >= m.top+vis {
 		m.top = m.row - vis + 1
 	}
-	m.top = clampTop(m.top, m.height()-vis)
+	m.top = int(clampTop(scrollOffset(m.top), scrollOffset(m.height()-vis)))
 	return m
 }
 
-// clampTop bounds a scroll offset to [0, max]; a max below zero (grid shorter
-// than the window) pins it to the top.
-func clampTop(top, max int) int {
-	if max < 0 || top < 0 {
+// scrollOffset is a vertical scroll position (rows from the top of the grid).
+type scrollOffset int
+
+// clampTop bounds a scroll offset to [0, limit]; a limit below zero (grid
+// shorter than the window) pins it to the top.
+func clampTop(top, limit scrollOffset) scrollOffset {
+	if limit < 0 || top < 0 {
 		return 0
 	}
-	if top > max {
-		return max
+	if top > limit {
+		return limit
 	}
 	return top
 }

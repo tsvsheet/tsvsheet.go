@@ -227,7 +227,7 @@ func TestEmbedded_OK(t *testing.T) {
 		s, err := sheet.Parse([]byte("=output(9)\n"))
 		return s, ref, err
 	}
-	sess, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root")
+	sess, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root", sheet.DefaultLimits())
 	require.NoError(t, err)
 	srv := serve.NewServer(sess, func() error { return nil }, nil)
 

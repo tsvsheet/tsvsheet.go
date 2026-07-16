@@ -55,6 +55,9 @@ const (
 // omitted to read stdin.
 const argSheetOptional = "[sheet]"
 
+// flagMaxCells names the global resource-cap flag.
+const flagMaxCells = "max-cells"
+
 // Version is a build version string, supplied by main (ldflags -X) and threaded
 // into the command rather than held in a package-level variable.
 type Version string
@@ -88,12 +91,10 @@ func Command(v Version) *cli.Command {
 }
 
 // configureLogger installs the default structured logger from the parsed
-// logging flags and applies the --max-cells resource cap when set.
-func configureLogger(ctx context.Context, c *cli.Command) (context.Context, error) {
+// logging flags. The --max-cells resource cap is applied per command (threaded
+// through the compute path and the editing session), not via a global here.
+func configureLogger(ctx context.Context, _ *cli.Command) (context.Context, error) {
 	slog.SetDefault(loggerConfig.NewLogger(stderr))
-	if n := int(c.Int("max-cells")); n > 0 {
-		sheet.SetLimits(sheet.Limits{ResultCells: n, GridDim: n, ResultBytes: n})
-	}
 	return ctx, nil
 }
 
@@ -101,10 +102,21 @@ func configureLogger(ctx context.Context, c *cli.Command) (context.Context, erro
 // untrusted sheet cannot exhaust memory. Zero (the default) keeps DefaultLimits.
 func maxCellsFlag() cli.Flag {
 	return &cli.IntFlag{
-		Name:  "max-cells",
+		Name:  flagMaxCells,
 		Usage: "cap on the cells, grid dimension, and bytes a single formula result or grid may reach (0 = built-in default)",
 		Value: 0,
 	}
+}
+
+// maxCellsLimits resolves the global --max-cells flag to resource limits: a
+// positive cap bounds the cells, grid dimension, and bytes any single formula
+// result or edit may reach; zero (the default) keeps the engine's generous
+// DefaultLimits.
+func maxCellsLimits(c *cli.Command) sheet.Limits {
+	if n := c.Root().Int(flagMaxCells); n > 0 {
+		return sheet.Limits{ResultCells: n, GridDim: n, ResultBytes: n}
+	}
+	return sheet.DefaultLimits()
 }
 
 // loggerFlags builds the global --log-level / --log-format flags.

@@ -116,8 +116,13 @@ func fnMid(args []Value) Value {
 	return stringValue(textVal(runes[from:to]))
 }
 
-// fnRept repeats text a whole number of times; a negative count is #VALUE!.
-func fnRept(args []Value) Value {
+// byteBudget is the maximum number of bytes a string formula result may reach.
+type byteBudget int
+
+// repeatText repeats text a whole number of times (Excel REPT); a negative
+// count is #VALUE!, and a result exceeding the byte budget is #VALUE!. REPT
+// dispatches lazily (evalRept) so it can read the injected byte limit.
+func repeatText(args []Value, limit byteBudget) Value {
 	n, bad := intArg(args[1])
 	if bad.isError() {
 		return bad
@@ -126,7 +131,7 @@ func fnRept(args []Value) Value {
 		return errorValue(ErrValue)
 	}
 	text := argText(args, 0)
-	if len(text) > 0 && int64(n)*int64(len(text)) > int64(active.ResultBytes) {
+	if len(text) > 0 && int64(n)*int64(len(text)) > int64(limit) {
 		return errorValue(ErrValue) // result exceeds the byte budget
 	}
 	return stringValue(textVal(strings.Repeat(text, int(n))))

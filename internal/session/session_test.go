@@ -41,6 +41,29 @@ func TestReferences_PrecedentsAndDependents(t *testing.T) {
 	assert.Equal(t, []sheet.Address{{Row: 1, Col: 3}}, deps) // B2 read by D2
 }
 
+func TestNewEmbeddable_ZeroLimitsUseDefault(t *testing.T) {
+	t.Parallel()
+
+	// A zero (unset) Limits falls back to DefaultLimits, so an edit within the
+	// generous default grid dimension succeeds — a degenerate zero cap would
+	// reject every edit.
+	s, err := session.NewEmbeddable([]byte("1\n"), nil, "", sheet.Limits{})
+	require.NoError(t, err)
+	require.NoError(t, s.SetCell(sheet.Address{Row: 3, Col: 0}, "x"))
+}
+
+func TestNewEmbeddable_HonorsInjectedLimits(t *testing.T) {
+	t.Parallel()
+
+	// A non-zero Limits is threaded into the session's edit path: an address
+	// beyond the injected grid dimension is rejected.
+	s, err := session.NewEmbeddable([]byte("1\n"), nil, "", sheet.Limits{ResultCells: 5, GridDim: 5, ResultBytes: 5})
+	require.NoError(t, err)
+	err = s.SetCell(sheet.Address{Row: 5, Col: 0}, "x")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+}
+
 func TestNewEmbeddable_ResolvesSheetOutput(t *testing.T) {
 	t.Parallel()
 
@@ -48,7 +71,7 @@ func TestNewEmbeddable_ResolvesSheetOutput(t *testing.T) {
 		s, err := sheet.Parse([]byte("=output(7)\n"))
 		return s, ref, err
 	}
-	s, err := session.NewEmbeddable([]byte("=sheet(\"child\")\n"), loader, "root")
+	s, err := session.NewEmbeddable([]byte("=sheet(\"child\")\n"), loader, "root", sheet.DefaultLimits())
 	require.NoError(t, err)
 	assert.Equal(t, "7", s.Snapshot().Computed[0][0])
 }
@@ -60,7 +83,7 @@ func TestEmbedded_ReturnsSubSheetOrNotOK(t *testing.T) {
 		s, err := sheet.Parse([]byte("=output(9)\n"))
 		return s, ref, err
 	}
-	s, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root")
+	s, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root", sheet.DefaultLimits())
 	require.NoError(t, err)
 
 	path, grid, ok := s.Embedded(sheet.Address{Row: 0, Col: 0})

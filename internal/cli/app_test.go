@@ -15,12 +15,12 @@ import (
 	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
-// TestCLI_MaxCellsCap proves --max-cells narrows the process-wide OOM cap: with
-// a 5-cell budget a SEQUENCE(10) is rejected. Not parallel — it mutates the
-// package-global limits, so it runs to completion (and resets) before any
-// t.Parallel test resumes.
+// TestCLI_MaxCellsCap proves --max-cells narrows the OOM cap that the render
+// command threads into the compute pass: with a 5-cell budget a SEQUENCE(10) is
+// rejected. Nothing global is mutated, so the test is safe to run in parallel.
 func TestCLI_MaxCellsCap(t *testing.T) {
-	t.Cleanup(func() { sheet.SetLimits(sheet.DefaultLimits) })
+	t.Parallel()
+
 	path := writeTemp(t, "big.tsvt", "=sequence(10)\n")
 	out, err := runCLI(t, "--max-cells", "5", "render", path)
 	require.NoError(t, err)
@@ -192,7 +192,7 @@ func TestRunParse_ReadError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runParse(streams, "-", false, false)
+	err := runParse(streams, "-", false, false, sheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrReadInput)
 }
@@ -201,7 +201,7 @@ func TestRunRender_ReadError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runRender(streams, "-", false)
+	err := runRender(streams, "-", false, sheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrReadInput)
 }
