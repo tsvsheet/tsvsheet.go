@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/uplang/go-tsvsheet"
 	"github.com/urfave/cli/v3"
 
 	"github.com/uplang/tsvsheet.go/internal/constants"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // runCheck parses and statically checks a spreadsheet, writing one diagnostic
@@ -26,12 +26,12 @@ func runCheck(streams Streams, source sourcePath) error {
 	if err != nil {
 		return err
 	}
-	return reportDiagnostics(streams.Err, sheet.Check(parsed))
+	return reportDiagnostics(streams.Err, tsvsheet.Check(parsed))
 }
 
 // reportDiagnostics writes each diagnostic to w and returns ErrDiagnostics when
 // any are present.
-func reportDiagnostics(w io.Writer, diags []sheet.Diagnostic) error {
+func reportDiagnostics(w io.Writer, diags []tsvsheet.Diagnostic) error {
 	for _, d := range diags {
 		_, _ = fmt.Fprintf(w, "%s: %s\n", d.Cell, d.Message)
 	}
@@ -42,7 +42,7 @@ func reportDiagnostics(w io.Writer, diags []sheet.Diagnostic) error {
 }
 
 // isSyntaxError reports whether err is a formula syntax error (exit-code 2).
-func isSyntaxError(err error) bool { return errors.Is(err, constants.ErrSyntax) }
+func isSyntaxError(err error) bool { return errors.Is(err, tsvsheet.ErrSyntax) }
 
 // isDiagnostics reports whether err signals that check found diagnostics.
 func isDiagnostics(err error) bool { return errors.Is(err, constants.ErrDiagnostics) }

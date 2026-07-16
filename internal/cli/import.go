@@ -4,12 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/uplang/go-tsvsheet"
 	"github.com/urfave/cli/v3"
 
-	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/importer"
 	"github.com/uplang/tsvsheet.go/internal/session"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // The content-typed import flags (ADR 0006 §7–§8), registered on every command
@@ -46,15 +45,15 @@ func importFlags() []cli.Flag {
 // resolveImport builds the import Fetcher and its refresh cache from the parsed
 // flags: nil (imports off) when --allow-import is absent; ErrInvalidValue when
 // --allow-import is set with no --import-host; otherwise a hardened net/http
-// Fetcher wrapped in a cross-pass cache, returned both as the sheet.Fetcher the
+// Fetcher wrapped in a cross-pass cache, returned both as the tsvsheet.Fetcher the
 // engine consumes and as the concrete Cache the frontend clears on refresh.
-func resolveImport(c *cli.Command) (sheet.Fetcher, *importer.Cache, error) {
+func resolveImport(c *cli.Command) (tsvsheet.Fetcher, *importer.Cache, error) {
 	if !c.Bool(flagAllowImport) {
 		return nil, nil, nil
 	}
 	hosts := c.StringSlice(flagImportHost)
 	if len(hosts) == 0 {
-		return nil, nil, constants.ErrInvalidValue.With(nil, "message", importHostRequired)
+		return nil, nil, tsvsheet.ErrInvalidValue.With(nil, "message", importHostRequired)
 	}
 	cache := importer.NewCache(importer.New(importer.Config{
 		AllowedHosts: hostPatterns(hosts),
@@ -86,7 +85,7 @@ func wireRefresh(sess *session.Session, cache *importer.Cache) {
 // limits and resolves the import Fetcher (nil when --allow-import is off) from
 // the flags, for the one-shot compute commands (render, parse). Flag validation
 // failures surface as the command's error.
-func importedAction(fn func(Streams, positional, sheet.Limits, sheet.Fetcher) error) cli.ActionFunc {
+func importedAction(fn func(Streams, positional, tsvsheet.Limits, tsvsheet.Fetcher) error) cli.ActionFunc {
 	return func(_ context.Context, c *cli.Command) error {
 		fetcher, _, err := resolveImport(c)
 		if err != nil {

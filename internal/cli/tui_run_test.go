@@ -11,8 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/uplang/tsvsheet.go/internal/constants"
+	"github.com/uplang/go-tsvsheet"
 )
 
 // withRunProgram swaps the tea program runner for a test double.
@@ -40,7 +39,7 @@ func TestRunTUI_RequiresFile(t *testing.T) {
 
 	err := runTUI(Streams{In: strings.NewReader("")}, tuiConfig{source: "-"})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
 
 func TestRunTUI_ProgramError(t *testing.T) {

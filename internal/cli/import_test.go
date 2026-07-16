@@ -9,20 +9,19 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uplang/go-tsvsheet"
 	"github.com/urfave/cli/v3"
 
-	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/importer"
 	"github.com/uplang/tsvsheet.go/internal/session"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // runImportFlags parses args against a throwaway command carrying the import
 // flags and returns what resolveImport makes of them.
-func runImportFlags(t *testing.T, args ...string) (sheet.Fetcher, *importer.Cache, error) {
+func runImportFlags(t *testing.T, args ...string) (tsvsheet.Fetcher, *importer.Cache, error) {
 	t.Helper()
 	var (
-		gotFetcher sheet.Fetcher
+		gotFetcher tsvsheet.Fetcher
 		gotCache   *importer.Cache
 		gotErr     error
 	)
@@ -55,18 +54,18 @@ func TestResolveImport_AllowWithoutHostErrors(t *testing.T) {
 	// silent deny.
 	_, _, err := runImportFlags(t, "--allow-import")
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
 
 func TestResolveImport_AllowWithHostBuildsFetcher(t *testing.T) {
 	t.Parallel()
 
 	// --allow-import plus at least one host builds the Fetcher (and its refresh
-	// cache); the Cache is itself the sheet.Fetcher the engine consumes.
+	// cache); the Cache is itself the tsvsheet.Fetcher the engine consumes.
 	fetcher, cache, err := runImportFlags(t, "--allow-import", "--import-host", "example.com")
 	require.NoError(t, err)
 	require.NotNil(t, cache)
-	assert.Equal(t, sheet.Fetcher(cache), fetcher)
+	assert.Equal(t, tsvsheet.Fetcher(cache), fetcher)
 }
 
 func TestHostPatterns_Converts(t *testing.T) {
@@ -98,13 +97,13 @@ func TestWireRefresh_RegistersCacheClear(t *testing.T) {
 func TestComputeOptions_CarriesFetcher(t *testing.T) {
 	t.Parallel()
 
-	fetcher := sheet.Fetcher(importer.New(importer.Config{}))
+	fetcher := tsvsheet.Fetcher(importer.New(importer.Config{}))
 
 	// Both the stdin branch and the file branch carry the injected Fetcher.
-	stdinOpts := computeOptions("-", false, sheet.DefaultLimits(), fetcher)
+	stdinOpts := computeOptions("-", false, tsvsheet.DefaultLimits(), fetcher)
 	assert.Equal(t, fetcher, stdinOpts.Fetcher)
 
-	fileOpts := computeOptions(sheetFile(t), false, sheet.DefaultLimits(), fetcher)
+	fileOpts := computeOptions(sheetFile(t), false, tsvsheet.DefaultLimits(), fetcher)
 	assert.Equal(t, fetcher, fileOpts.Fetcher)
 }
 
@@ -114,7 +113,7 @@ func TestRenderCommand_AllowImportRequiresHost(t *testing.T) {
 	cmd := renderCommand()
 	err := cmd.Run(context.Background(), []string{cmdRender, "--allow-import", string(sheetFile(t))})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
 
 func TestRenderCommand_AllowImportWithHost(t *testing.T) {
@@ -135,7 +134,7 @@ func TestTUICommand_AllowImportRequiresHost(t *testing.T) {
 	cmd := tuiCommand()
 	err := cmd.Run(context.Background(), []string{cmdTUI, "--allow-import", string(sheetFile(t))})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
 
 func TestTUICommand_AllowImportWithHost(t *testing.T) {

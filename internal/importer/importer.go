@@ -1,7 +1,7 @@
-// Package importer is the security-hardened net/http sheet.Fetcher for
+// Package importer is the security-hardened net/http tsvsheet.Fetcher for
 // content-typed imports (ADR 0006 §7). It is the network security boundary: a
 // frontend injects a configured Fetcher into the engine, and every IMPORT*
-// fetch is funneled through it. The engine holds only the sheet.Fetcher
+// fetch is funneled through it. The engine holds only the tsvsheet.Fetcher
 // interface; the allowlist, timeout, size cap, and redirect re-validation live
 // here so the engine stays transport-free.
 //
@@ -19,8 +19,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uplang/go-tsvsheet"
+
 	"github.com/uplang/tsvsheet.go/internal/constants"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // HostPattern is one allowlist entry: an exact host ("example.com") or a
@@ -50,7 +51,7 @@ type Config struct {
 	MaxBytes     ByteSize
 }
 
-// Fetcher is the concrete sheet.Fetcher. Its methods take value receivers and
+// Fetcher is the concrete tsvsheet.Fetcher. Its methods take value receivers and
 // New returns it by value: the struct is effectively immutable after
 // construction (the embedded *http.Client is the only reference type, and it is
 // never reassigned), so no pointer is required.
@@ -83,17 +84,17 @@ func New(cfg Config) Fetcher {
 // Fetch retrieves url, sending accept as the Accept header, and returns the body
 // with its normalized (parameter-stripped) Content-Type. Every failure is a
 // distinct constants.ErrImport* sentinel.
-func (f Fetcher) Fetch(url sheet.ImportURL, accept sheet.MediaType) (sheet.FetchResult, error) {
+func (f Fetcher) Fetch(url tsvsheet.ImportURL, accept tsvsheet.MediaType) (tsvsheet.FetchResult, error) {
 	ctx, cancel := f.contextFor()
 	defer cancel()
 	req, err := f.request(ctx, url, accept)
 	if err != nil {
-		return sheet.FetchResult{}, err
+		return tsvsheet.FetchResult{}, err
 	}
 	resp, err := f.client.Do(req)
 	if err != nil {
 		closeBody(resp)
-		return sheet.FetchResult{}, constants.ErrImportFetch.With(err)
+		return tsvsheet.FetchResult{}, constants.ErrImportFetch.With(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return f.result(resp)
@@ -113,7 +114,11 @@ func (f Fetcher) contextFor() (context.Context, context.CancelFunc) {
 // be permitted for the host (https anywhere; http only for a loopback target),
 // and its host must be allowlisted — otherwise the matching sentinel, before any
 // network I/O.
-func (f Fetcher) request(ctx context.Context, url sheet.ImportURL, accept sheet.MediaType) (*http.Request, error) {
+func (f Fetcher) request(
+	ctx context.Context,
+	url tsvsheet.ImportURL,
+	accept tsvsheet.MediaType,
+) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, string(url), nil)
 	if err != nil {
 		return nil, constants.ErrImportURL.With(err)
@@ -131,19 +136,19 @@ func (f Fetcher) request(ctx context.Context, url sheet.ImportURL, accept sheet.
 // result turns a received response into a FetchResult: only a 2xx status is
 // accepted, the body is read under the size cap, and the Content-Type is
 // normalized to its base media type (parameters stripped).
-func (f Fetcher) result(resp *http.Response) (sheet.FetchResult, error) {
+func (f Fetcher) result(resp *http.Response) (tsvsheet.FetchResult, error) {
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return sheet.FetchResult{}, constants.ErrImportStatus
+		return tsvsheet.FetchResult{}, constants.ErrImportStatus
 	}
 	body, err := f.readCapped(resp.Body)
 	if err != nil {
-		return sheet.FetchResult{}, err
+		return tsvsheet.FetchResult{}, err
 	}
 	base, err := normalizeContentType(resp)
 	if err != nil {
-		return sheet.FetchResult{}, err
+		return tsvsheet.FetchResult{}, err
 	}
-	return sheet.FetchResult{ContentType: base, Body: body}, nil
+	return tsvsheet.FetchResult{ContentType: base, Body: body}, nil
 }
 
 // readCapped reads at most f.maxBytes bytes: it reads one byte past the cap and
@@ -244,12 +249,12 @@ func IsLoopback(host Host) bool {
 // media type with parameters stripped (so a correctly-typed response carrying a
 // charset param still matches the handshake). A malformed header is
 // ErrImportContentType.
-func normalizeContentType(resp *http.Response) (sheet.MediaType, error) {
+func normalizeContentType(resp *http.Response) (tsvsheet.MediaType, error) {
 	base, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if err != nil {
 		return "", constants.ErrImportContentType.With(err)
 	}
-	return sheet.MediaType(base), nil
+	return tsvsheet.MediaType(base), nil
 }
 
 // closeBody closes a response body when the response is present — the redirect

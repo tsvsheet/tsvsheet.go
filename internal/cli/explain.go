@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/uplang/go-tsvsheet"
 	"github.com/urfave/cli/v3"
-
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // explainConfig binds the explain command's source, target cell, and output
@@ -24,7 +23,7 @@ type jsonOutput bool
 // runExplain traces how the target cell was computed, writing a human-readable
 // report or JSON to the output stream.
 func runExplain(streams Streams, cfg explainConfig) error {
-	at, err := sheet.ParseAddress(sheet.AddressText(cfg.cell))
+	at, err := tsvsheet.ParseAddress(tsvsheet.AddressText(cfg.cell))
 	if err != nil {
 		return err
 	}
@@ -38,7 +37,7 @@ func runExplain(streams Streams, cfg explainConfig) error {
 	if err != nil {
 		return err
 	}
-	trace, err := sheet.Explain(parsed, at)
+	trace, err := tsvsheet.Explain(parsed, at)
 	if err != nil {
 		return err
 	}
@@ -46,7 +45,7 @@ func runExplain(streams Streams, cfg explainConfig) error {
 }
 
 // writeTrace renders a trace as JSON or a human-readable report.
-func writeTrace(w io.Writer, trace sheet.Trace, isJSON jsonOutput) error {
+func writeTrace(w io.Writer, trace tsvsheet.Trace, isJSON jsonOutput) error {
 	if isJSON {
 		return writeJSON(w, trace)
 	}
@@ -54,7 +53,7 @@ func writeTrace(w io.Writer, trace sheet.Trace, isJSON jsonOutput) error {
 }
 
 // writeTraceText writes the human-readable trace report.
-func writeTraceText(w io.Writer, trace sheet.Trace) error {
+func writeTraceText(w io.Writer, trace tsvsheet.Trace) error {
 	_, _ = fmt.Fprintf(w, "%s = %s\n", trace.Cell, trace.Value)
 	if trace.Formula != "" {
 		_, _ = fmt.Fprintf(w, "  formula: %s\n", trace.Formula)

@@ -1,8 +1,9 @@
 package cli
 
 import (
+	"github.com/uplang/go-tsvsheet"
+
 	"github.com/uplang/tsvsheet.go/internal/loader"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // pathAccess selects sheet-reference confinement: references stay within the
@@ -19,7 +20,7 @@ const (
 
 // sheetLoader builds the loader for a sheet rooted at dir: confined to dir via
 // os.Root by default, or reading any path when isUnconfined is set.
-func sheetLoader(dir loader.Dir, isUnconfined pathAccess) sheet.Loader {
+func sheetLoader(dir loader.Dir, isUnconfined pathAccess) tsvsheet.Loader {
 	if isUnconfined {
 		return loader.Unconfined(dir)
 	}

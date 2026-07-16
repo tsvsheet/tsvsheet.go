@@ -12,9 +12,9 @@ import (
 	"encoding/json"
 	"syscall/js"
 
-	"github.com/uplang/tsvsheet.go/internal/constants"
+	"github.com/uplang/go-tsvsheet"
+
 	"github.com/uplang/tsvsheet.go/internal/session"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // state is the one in-browser editing session.
@@ -42,7 +42,7 @@ func main() {
 // #REF!) and no operator allowlist, so content-typed imports stay disabled here
 // (every IMPORT* is #IMPORT!).
 func newSession(src []byte) (*session.Session, error) {
-	return session.NewEmbeddable(src, nil, "", sheet.BrowserLimits(), nil)
+	return session.NewEmbeddable(src, nil, "", tsvsheet.BrowserLimits(), nil)
 }
 
 // snapshotJSON marshals the current read model.
@@ -71,7 +71,7 @@ func load(_ js.Value, args []js.Value) any {
 // setCell edits one cell's source (a literal or an =formula) and returns the
 // recomputed state, or an {"error"} on a malformed formula.
 func setCell(_ js.Value, args []js.Value) any {
-	if err := state.SetCell(sheet.Address{Row: args[0].Int(), Col: args[1].Int()}, args[2].String()); err != nil {
+	if err := state.SetCell(tsvsheet.Address{Row: args[0].Int(), Col: args[1].Int()}, args[2].String()); err != nil {
 		return errJSON(err)
 	}
 	return snapshotJSON()
@@ -79,7 +79,7 @@ func setCell(_ js.Value, args []js.Value) any {
 
 // structure applies a row/column insert or delete relative to a cell.
 func structure(_ js.Value, args []js.Value) any {
-	at := sheet.Address{Row: args[1].Int(), Col: args[2].Int()}
+	at := tsvsheet.Address{Row: args[1].Int(), Col: args[2].Int()}
 	switch args[0].String() {
 	case "insert-row":
 		state.InsertRow(at)
@@ -90,14 +90,14 @@ func structure(_ js.Value, args []js.Value) any {
 	case "delete-col":
 		state.DeleteCol(at)
 	default:
-		return errJSON(constants.ErrInvalidValue.With(nil, "op", args[0].String()))
+		return errJSON(tsvsheet.ErrInvalidValue.With(nil, "op", args[0].String()))
 	}
 	return snapshotJSON()
 }
 
 // references returns the selected cell's precedents and dependents.
 func references(_ js.Value, args []js.Value) any {
-	at, err := sheet.ParseAddress(sheet.AddressText(args[0].String()))
+	at, err := tsvsheet.ParseAddress(tsvsheet.AddressText(args[0].String()))
 	if err != nil {
 		return errJSON(err)
 	}
@@ -108,7 +108,7 @@ func references(_ js.Value, args []js.Value) any {
 
 // explain traces how the cell at the given A1 address was produced.
 func explain(_ js.Value, args []js.Value) any {
-	at, err := sheet.ParseAddress(sheet.AddressText(args[0].String()))
+	at, err := tsvsheet.ParseAddress(tsvsheet.AddressText(args[0].String()))
 	if err != nil {
 		return errJSON(err)
 	}

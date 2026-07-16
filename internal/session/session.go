@@ -1,6 +1,6 @@
 // Package session is the stateful editing model shared by every interactive
 // frontend (serve, tui): one spreadsheet — a .tsvt grid of literal and formula
-// cells — recomputed through the engine (internal/sheet) after each edit. It is
+// cells — recomputed through the engine (the go-tsvsheet library) after each edit. It is
 // the repo's one sanctioned pointer-receiver type: it wraps mutable state
 // guarded for concurrent use, so a single Session backs the HTTP handlers and
 // the TUI model alike.
@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uplang/tsvsheet.go/internal/sheet"
+	"github.com/uplang/go-tsvsheet"
 )
 
 // State is the complete read model a frontend renders: the computed value grid,
@@ -19,22 +19,22 @@ import (
 // diagnostics, and the dirty flag. It is a value snapshot; mutating it never
 // affects the Session.
 type State struct {
-	Computed    [][]string         `json:"computed"`
-	Source      [][]string         `json:"source"`
-	Diagnostics []sheet.Diagnostic `json:"diagnostics"`
-	IsDirty     bool               `json:"dirty"`
+	Computed    [][]string            `json:"computed"`
+	Source      [][]string            `json:"source"`
+	Diagnostics []tsvsheet.Diagnostic `json:"diagnostics"`
+	IsDirty     bool                  `json:"dirty"`
 }
 
 // Session is a mutable spreadsheet. Its methods are safe for concurrent use.
 type Session struct {
-	loader       sheet.Loader
-	fetcher      sheet.Fetcher
+	loader       tsvsheet.Loader
+	fetcher      tsvsheet.Fetcher
 	clearImports func()
-	base         sheet.Path
-	sheet        sheet.Sheet
-	computed     sheet.Grid
-	diagnostics  []sheet.Diagnostic
-	limits       sheet.Limits
+	base         tsvsheet.Path
+	sheet        tsvsheet.Sheet
+	computed     tsvsheet.Grid
+	diagnostics  []tsvsheet.Diagnostic
+	limits       tsvsheet.Limits
 	mu           sync.Mutex
 	isDirty      bool
 }
@@ -44,7 +44,7 @@ type Session struct {
 // #IMPORT!), and the engine's generous DefaultLimits. It fails on a syntax
 // error; the resulting session is clean (not dirty).
 func New(src []byte) (*Session, error) {
-	return NewEmbeddable(src, nil, "", sheet.DefaultLimits(), nil)
+	return NewEmbeddable(src, nil, "", tsvsheet.DefaultLimits(), nil)
 }
 
 // NewEmbeddable is New with an injected sheet loader, this sheet's own path (so
@@ -53,12 +53,12 @@ func New(src []byte) (*Session, error) {
 // content-typed IMPORT* cells fetch through (nil disables imports).
 func NewEmbeddable(
 	src []byte,
-	loader sheet.Loader,
-	base sheet.Path,
-	limits sheet.Limits,
-	fetcher sheet.Fetcher,
+	loader tsvsheet.Loader,
+	base tsvsheet.Path,
+	limits tsvsheet.Limits,
+	fetcher tsvsheet.Fetcher,
 ) (*Session, error) {
-	parsed, err := sheet.Parse(src)
+	parsed, err := tsvsheet.Parse(src)
 	if err != nil {
 		return nil, err
 	}
@@ -70,9 +70,9 @@ func NewEmbeddable(
 // withDefaults resolves the injected limits, falling the zero value (an
 // unspecified Limits) back to the engine's generous DefaultLimits so a session
 // never enforces a degenerate zero grid dimension.
-func withDefaults(limits sheet.Limits) sheet.Limits {
-	if limits == (sheet.Limits{}) {
-		return sheet.DefaultLimits()
+func withDefaults(limits tsvsheet.Limits) tsvsheet.Limits {
+	if limits == (tsvsheet.Limits{}) {
+		return tsvsheet.DefaultLimits()
 	}
 	return limits
 }
@@ -82,19 +82,19 @@ func withDefaults(limits sheet.Limits) sheet.Limits {
 // the clock once.
 func (s *Session) recompute() {
 	s.computed = s.sheet.ComputeWith(s.computeOptions())
-	s.diagnostics = sheet.Check(s.sheet)
+	s.diagnostics = tsvsheet.Check(s.sheet)
 }
 
 // computeOptions builds the compute options for this session: its loader, base
 // path, and resource limits, with the clock sampled at call time.
-func (s *Session) computeOptions() sheet.ComputeOptions {
-	return sheet.ComputeOptions{At: time.Now(), Loader: s.loader, Base: s.base, Limits: s.limits, Fetcher: s.fetcher}
+func (s *Session) computeOptions() tsvsheet.ComputeOptions {
+	return tsvsheet.ComputeOptions{At: time.Now(), Loader: s.loader, Base: s.base, Limits: s.limits, Fetcher: s.fetcher}
 }
 
 // SetCell edits one cell's source text (a literal or a formula) and recomputes.
 // A malformed formula is rejected and the sheet is left unchanged (atomic); on
 // success the session is marked dirty.
-func (s *Session) SetCell(at sheet.Address, text string) error {
+func (s *Session) SetCell(at tsvsheet.Address, text string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	updated, err := s.sheet.Set(at, text, s.limits)
@@ -110,7 +110,7 @@ func (s *Session) SetCell(at sheet.Address, text string) error {
 // structuralEdit applies a whole-grid transform (a row or column insert or
 // delete), recomputes, and marks the session dirty. Structural edits never
 // fail: an out-of-range index is a no-op inside the engine.
-func (s *Session) structuralEdit(edit func(sheet.Sheet) sheet.Sheet) {
+func (s *Session) structuralEdit(edit func(tsvsheet.Sheet) tsvsheet.Sheet) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sheet = edit(s.sheet)
@@ -119,23 +119,23 @@ func (s *Session) structuralEdit(edit func(sheet.Sheet) sheet.Sheet) {
 }
 
 // InsertRow inserts a blank row before at.Row, shifting references down.
-func (s *Session) InsertRow(at sheet.Address) {
-	s.structuralEdit(func(sh sheet.Sheet) sheet.Sheet { return sh.InsertRow(at) })
+func (s *Session) InsertRow(at tsvsheet.Address) {
+	s.structuralEdit(func(sh tsvsheet.Sheet) tsvsheet.Sheet { return sh.InsertRow(at) })
 }
 
 // DeleteRow removes row at.Row, turning references to it into #REF!.
-func (s *Session) DeleteRow(at sheet.Address) {
-	s.structuralEdit(func(sh sheet.Sheet) sheet.Sheet { return sh.DeleteRow(at) })
+func (s *Session) DeleteRow(at tsvsheet.Address) {
+	s.structuralEdit(func(sh tsvsheet.Sheet) tsvsheet.Sheet { return sh.DeleteRow(at) })
 }
 
 // InsertCol inserts a blank column before at.Col, shifting references right.
-func (s *Session) InsertCol(at sheet.Address) {
-	s.structuralEdit(func(sh sheet.Sheet) sheet.Sheet { return sh.InsertCol(at) })
+func (s *Session) InsertCol(at tsvsheet.Address) {
+	s.structuralEdit(func(sh tsvsheet.Sheet) tsvsheet.Sheet { return sh.InsertCol(at) })
 }
 
 // DeleteCol removes column at.Col, turning references to it into #REF!.
-func (s *Session) DeleteCol(at sheet.Address) {
-	s.structuralEdit(func(sh sheet.Sheet) sheet.Sheet { return sh.DeleteCol(at) })
+func (s *Session) DeleteCol(at tsvsheet.Address) {
+	s.structuralEdit(func(sh tsvsheet.Sheet) tsvsheet.Sheet { return sh.DeleteCol(at) })
 }
 
 // Snapshot returns a deep-copied read model safe for the caller to hold and
@@ -151,7 +151,7 @@ func (s *Session) state() State {
 	return State{
 		Computed:    grid(s.computed),
 		Source:      grid(s.sheet.Source()),
-		Diagnostics: append([]sheet.Diagnostic(nil), s.diagnostics...),
+		Diagnostics: append([]tsvsheet.Diagnostic(nil), s.diagnostics...),
 		IsDirty:     s.isDirty,
 	}
 }
@@ -201,16 +201,16 @@ func (s *Session) RefreshImports() State {
 }
 
 // Explain traces how the cell at addr was produced over the current sheet.
-func (s *Session) Explain(addr sheet.Address) (sheet.Trace, error) {
+func (s *Session) Explain(addr tsvsheet.Address) (tsvsheet.Trace, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return sheet.Explain(s.sheet, addr)
+	return tsvsheet.Explain(s.sheet, addr)
 }
 
 // References returns the cell at addr's precedents (the spans its formula reads)
 // and dependents (the cells whose formulas read it) — the dependency edges a
 // frontend highlights on selection.
-func (s *Session) References(addr sheet.Address) ([]sheet.Span, []sheet.Address) {
+func (s *Session) References(addr tsvsheet.Address) ([]tsvsheet.Span, []tsvsheet.Address) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.sheet.Precedents(addr), s.sheet.Dependents(addr)
@@ -219,7 +219,7 @@ func (s *Session) References(addr sheet.Address) ([]sheet.Span, []sheet.Address)
 // Embedded returns the sub-sheet a SHEET(...) cell embeds: its resolved path and
 // its own computed grid, for nested rendering. ok is false when the cell is not
 // a SHEET call or the reference cannot be resolved.
-func (s *Session) Embedded(at sheet.Address) (sheet.Path, sheet.Grid, bool) {
+func (s *Session) Embedded(at tsvsheet.Address) (tsvsheet.Path, tsvsheet.Grid, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	path, grid, ok := s.sheet.EmbeddedGrid(at, s.computeOptions())
@@ -238,12 +238,12 @@ func (s *Session) Source() []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var buf bytes.Buffer
-	_ = sheet.WriteTSV(&buf, s.sheet.Source())
+	_ = tsvsheet.WriteTSV(&buf, s.sheet.Source())
 	return buf.Bytes()
 }
 
 // grid deep-copies a grid to a plain [][]string for a State snapshot.
-func grid(g sheet.Grid) [][]string {
+func grid(g tsvsheet.Grid) [][]string {
 	out := make([][]string, len(g))
 	for i, row := range g {
 		out[i] = append([]string(nil), row...)

@@ -8,11 +8,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uplang/go-tsvsheet"
 
 	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/importer"
 	"github.com/uplang/tsvsheet.go/internal/session"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 func TestBuildRefresh(t *testing.T) {
@@ -40,7 +40,7 @@ func TestBuildRefresh(t *testing.T) {
 	// A malformed isnow pattern is rejected.
 	_, err = buildRefresh("garbage!!!", plain)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
 
 func TestLoadServer_BadRefreshPattern(t *testing.T) {
@@ -48,7 +48,7 @@ func TestLoadServer_BadRefreshPattern(t *testing.T) {
 
 	_, err := loadServer(serveConfig{source: sheetFile(t), refresh: "garbage!!!"})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
 
 // sheetFile writes the sample spreadsheet to a temp file and returns its path.
@@ -70,7 +70,7 @@ func TestLoadServer_RequiresFile(t *testing.T) {
 
 	_, err := loadServer(serveConfig{source: "-"})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
 
 func TestLoadServer_FileMissing(t *testing.T) {
@@ -87,14 +87,14 @@ func TestLoadServer_SyntaxError(t *testing.T) {
 	path := writeTemp(t, "bad.tsvt", "1\t=sum(\n")
 	_, err := loadServer(serveConfig{source: sourcePath(path)})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrSyntax)
+	assert.ErrorIs(t, err, tsvsheet.ErrSyntax)
 }
 
 func TestSaver_WritesFile(t *testing.T) {
 	t.Parallel()
 
 	source := sheetFile(t)
-	sess, _, err := loadEditable(source, false, sheet.DefaultLimits(), nil)
+	sess, _, err := loadEditable(source, false, tsvsheet.DefaultLimits(), nil)
 	require.NoError(t, err)
 
 	require.NoError(t, saver(sess, source)())
@@ -108,13 +108,13 @@ func TestSaver_WriteError(t *testing.T) {
 	t.Parallel()
 
 	source := sheetFile(t)
-	sess, _, err := loadEditable(source, false, sheet.DefaultLimits(), nil)
+	sess, _, err := loadEditable(source, false, tsvsheet.DefaultLimits(), nil)
 	require.NoError(t, err)
 
 	// A directory path cannot be written as a file.
 	err = saver(sess, sourcePath(t.TempDir()))()
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrWriteFile)
+	assert.ErrorIs(t, err, tsvsheet.ErrWriteFile)
 }
 
 func TestRunServe_GracefulShutdown(t *testing.T) {
@@ -132,7 +132,7 @@ func TestRunServe_LoadError(t *testing.T) {
 
 	err := runServe(context.Background(), serveConfig{source: "-"})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
 
 func TestRunServe_NonLoopbackWarns(t *testing.T) {
@@ -217,7 +217,7 @@ func TestServeCommand_AllowImportRequiresHost(t *testing.T) {
 	cmd := serveCommand()
 	err := cmd.Run(context.Background(), []string{cmdServe, "--allow-import", string(sheetFile(t)), "--port", "0"})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
 
 func TestServeCommand_AllowImportWithHost(t *testing.T) {

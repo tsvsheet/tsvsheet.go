@@ -10,9 +10,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uplang/go-tsvsheet"
 
 	"github.com/uplang/tsvsheet.go/internal/constants"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // TestCLI_MaxCellsCap proves --max-cells narrows the OOM cap that the render
@@ -152,7 +152,7 @@ func TestExitCode(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t, exitOK, exitCode(nil))
-	assert.Equal(t, exitSyntaxError, exitCode(constants.ErrSyntax.With(nil)))
+	assert.Equal(t, exitSyntaxError, exitCode(tsvsheet.ErrSyntax.With(nil)))
 	assert.Equal(t, exitError, exitCode(constants.ErrDiagnostics.With(nil)))
 	assert.Equal(t, exitError, exitCode(errors.New("boom")))
 }
@@ -180,7 +180,7 @@ func TestReadAll_Error(t *testing.T) {
 
 	_, err := readAll(failReader{})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrReadInput)
+	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
 }
 
 // failReader always errors, exercising readAll's error path.
@@ -192,18 +192,18 @@ func TestRunParse_ReadError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runParse(streams, "-", false, false, sheet.DefaultLimits(), nil)
+	err := runParse(streams, "-", false, false, tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrReadInput)
+	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
 }
 
 func TestRunRender_ReadError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runRender(streams, "-", false, sheet.DefaultLimits(), nil)
+	err := runRender(streams, "-", false, tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrReadInput)
+	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
 }
 
 func TestRunExplain_ReadError(t *testing.T) {
@@ -212,5 +212,5 @@ func TestRunExplain_ReadError(t *testing.T) {
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
 	err := runExplain(streams, explainConfig{source: "-", cell: "A1"})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrReadInput)
+	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
 }

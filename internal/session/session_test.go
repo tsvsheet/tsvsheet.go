@@ -7,23 +7,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uplang/go-tsvsheet"
 
-	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/importer"
 	"github.com/uplang/tsvsheet.go/internal/session"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
-// countingFetcher is a fake sheet.Fetcher that tallies its calls and returns a
+// countingFetcher is a fake tsvsheet.Fetcher that tallies its calls and returns a
 // fixed single-cell import body, so a test can observe whether a recompute
 // actually re-fetches.
 type countingFetcher struct {
 	calls *int32
 }
 
-func (f countingFetcher) Fetch(_ sheet.ImportURL, accept sheet.MediaType) (sheet.FetchResult, error) {
+func (f countingFetcher) Fetch(_ tsvsheet.ImportURL, accept tsvsheet.MediaType) (tsvsheet.FetchResult, error) {
 	atomic.AddInt32(f.calls, 1)
-	return sheet.FetchResult{ContentType: accept, Body: []byte("42\n")}, nil
+	return tsvsheet.FetchResult{ContentType: accept, Body: []byte("42\n")}, nil
 }
 
 func TestRefreshImports_ClearsCacheAndRefetches(t *testing.T) {
@@ -32,7 +31,7 @@ func TestRefreshImports_ClearsCacheAndRefetches(t *testing.T) {
 	var calls int32
 	cache := importer.NewCache(countingFetcher{calls: &calls})
 	s, err := session.NewEmbeddable(
-		[]byte(`=importcell("https://x/a")`+"\n"), nil, "", sheet.DefaultLimits(), cache,
+		[]byte(`=importcell("https://x/a")`+"\n"), nil, "", tsvsheet.DefaultLimits(), cache,
 	)
 	require.NoError(t, err)
 	s.OnRefresh(cache.Clear)
@@ -82,13 +81,13 @@ func TestReferences_PrecedentsAndDependents(t *testing.T) {
 
 	// B2 is read by D2 (=B2+C2); D2 reads B2 and C2.
 	s := newSession(t)
-	prec, deps := s.References(sheet.Address{Row: 1, Col: 3})
+	prec, deps := s.References(tsvsheet.Address{Row: 1, Col: 3})
 	require.Len(t, prec, 2)
-	assert.Equal(t, sheet.Address{Row: 1, Col: 1}, prec[0].From) // B2
-	assert.Empty(t, deps)                                        // nothing reads D2
+	assert.Equal(t, tsvsheet.Address{Row: 1, Col: 1}, prec[0].From) // B2
+	assert.Empty(t, deps)                                           // nothing reads D2
 
-	_, deps = s.References(sheet.Address{Row: 1, Col: 1})
-	assert.Equal(t, []sheet.Address{{Row: 1, Col: 3}}, deps) // B2 read by D2
+	_, deps = s.References(tsvsheet.Address{Row: 1, Col: 1})
+	assert.Equal(t, []tsvsheet.Address{{Row: 1, Col: 3}}, deps) // B2 read by D2
 }
 
 func TestNewEmbeddable_ZeroLimitsUseDefault(t *testing.T) {
@@ -97,9 +96,9 @@ func TestNewEmbeddable_ZeroLimitsUseDefault(t *testing.T) {
 	// A zero (unset) Limits falls back to DefaultLimits, so an edit within the
 	// generous default grid dimension succeeds — a degenerate zero cap would
 	// reject every edit.
-	s, err := session.NewEmbeddable([]byte("1\n"), nil, "", sheet.Limits{}, nil)
+	s, err := session.NewEmbeddable([]byte("1\n"), nil, "", tsvsheet.Limits{}, nil)
 	require.NoError(t, err)
-	require.NoError(t, s.SetCell(sheet.Address{Row: 3, Col: 0}, "x"))
+	require.NoError(t, s.SetCell(tsvsheet.Address{Row: 3, Col: 0}, "x"))
 }
 
 func TestNewEmbeddable_HonorsInjectedLimits(t *testing.T) {
@@ -111,23 +110,23 @@ func TestNewEmbeddable_HonorsInjectedLimits(t *testing.T) {
 		[]byte("1\n"),
 		nil,
 		"",
-		sheet.Limits{ResultCells: 5, GridDim: 5, ResultBytes: 5},
+		tsvsheet.Limits{ResultCells: 5, GridDim: 5, ResultBytes: 5},
 		nil,
 	)
 	require.NoError(t, err)
-	err = s.SetCell(sheet.Address{Row: 5, Col: 0}, "x")
+	err = s.SetCell(tsvsheet.Address{Row: 5, Col: 0}, "x")
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidValue)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
 
 func TestNewEmbeddable_ResolvesSheetOutput(t *testing.T) {
 	t.Parallel()
 
-	loader := func(_, ref sheet.Path) (sheet.Sheet, sheet.Path, error) {
-		s, err := sheet.Parse([]byte("=output(7)\n"))
+	loader := func(_, ref tsvsheet.Path) (tsvsheet.Sheet, tsvsheet.Path, error) {
+		s, err := tsvsheet.Parse([]byte("=output(7)\n"))
 		return s, ref, err
 	}
-	s, err := session.NewEmbeddable([]byte("=sheet(\"child\")\n"), loader, "root", sheet.DefaultLimits(), nil)
+	s, err := session.NewEmbeddable([]byte("=sheet(\"child\")\n"), loader, "root", tsvsheet.DefaultLimits(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "7", s.Snapshot().Computed[0][0])
 }
@@ -135,20 +134,20 @@ func TestNewEmbeddable_ResolvesSheetOutput(t *testing.T) {
 func TestEmbedded_ReturnsSubSheetOrNotOK(t *testing.T) {
 	t.Parallel()
 
-	loader := func(_, ref sheet.Path) (sheet.Sheet, sheet.Path, error) {
-		s, err := sheet.Parse([]byte("=output(9)\n"))
+	loader := func(_, ref tsvsheet.Path) (tsvsheet.Sheet, tsvsheet.Path, error) {
+		s, err := tsvsheet.Parse([]byte("=output(9)\n"))
 		return s, ref, err
 	}
-	s, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root", sheet.DefaultLimits(), nil)
+	s, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root", tsvsheet.DefaultLimits(), nil)
 	require.NoError(t, err)
 
-	path, grid, ok := s.Embedded(sheet.Address{Row: 0, Col: 0})
+	path, grid, ok := s.Embedded(tsvsheet.Address{Row: 0, Col: 0})
 	require.True(t, ok)
-	assert.Equal(t, sheet.Path("c"), path)
+	assert.Equal(t, tsvsheet.Path("c"), path)
 	assert.Equal(t, "9", grid[0][0])
 
 	// A non-embed session returns ok=false.
-	_, _, ok = newSession(t).Embedded(sheet.Address{Row: 0, Col: 0})
+	_, _, ok = newSession(t).Embedded(tsvsheet.Address{Row: 0, Col: 0})
 	assert.False(t, ok)
 }
 
@@ -171,7 +170,7 @@ func TestInsertRow_GrowsAndDirties(t *testing.T) {
 	t.Parallel()
 
 	s := newSession(t)
-	s.InsertRow(sheet.Address{Row: 1})
+	s.InsertRow(tsvsheet.Address{Row: 1})
 	st := s.Snapshot()
 	assert.Len(t, st.Source, 4) // 3 rows → 4
 	assert.True(t, st.IsDirty)
@@ -181,7 +180,7 @@ func TestDeleteRow_Shrinks(t *testing.T) {
 	t.Parallel()
 
 	s := newSession(t)
-	s.DeleteRow(sheet.Address{Row: 1})
+	s.DeleteRow(tsvsheet.Address{Row: 1})
 	assert.Len(t, s.Snapshot().Source, 2)
 }
 
@@ -189,7 +188,7 @@ func TestInsertCol_Widens(t *testing.T) {
 	t.Parallel()
 
 	s := newSession(t)
-	s.InsertCol(sheet.Address{Col: 1})
+	s.InsertCol(tsvsheet.Address{Col: 1})
 	assert.Len(t, s.Snapshot().Source[0], 5) // 4 cols → 5
 }
 
@@ -197,7 +196,7 @@ func TestDeleteCol_Narrows(t *testing.T) {
 	t.Parallel()
 
 	s := newSession(t)
-	s.DeleteCol(sheet.Address{Col: 1})
+	s.DeleteCol(tsvsheet.Address{Col: 1})
 	assert.Len(t, s.Snapshot().Source[0], 3)
 }
 
@@ -217,14 +216,14 @@ func TestNew_SyntaxError(t *testing.T) {
 
 	_, err := session.New([]byte("1\t=sum(\n"))
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrSyntax)
+	assert.ErrorIs(t, err, tsvsheet.ErrSyntax)
 }
 
 func TestSetCell_EditsLiteralAndRecomputes(t *testing.T) {
 	t.Parallel()
 
 	s := newSession(t)
-	require.NoError(t, s.SetCell(sheet.Address{Row: 1, Col: 1}, "10")) // B2 = 10
+	require.NoError(t, s.SetCell(tsvsheet.Address{Row: 1, Col: 1}, "10")) // B2 = 10
 	state := s.Snapshot()
 	assert.Equal(t, "10", state.Source[1][1])
 	assert.Equal(t, "13", state.Computed[1][3]) // D2 = 10+3
@@ -235,7 +234,7 @@ func TestSetCell_EditsFormula(t *testing.T) {
 	t.Parallel()
 
 	s := newSession(t)
-	require.NoError(t, s.SetCell(sheet.Address{Row: 1, Col: 3}, "=B2*C2")) // D2 = 2*3
+	require.NoError(t, s.SetCell(tsvsheet.Address{Row: 1, Col: 3}, "=B2*C2")) // D2 = 2*3
 	assert.Equal(t, "6", s.Snapshot().Computed[1][3])
 }
 
@@ -245,9 +244,9 @@ func TestSetCell_AtomicOnSyntaxError(t *testing.T) {
 	s := newSession(t)
 	before := s.Snapshot()
 
-	err := s.SetCell(sheet.Address{Row: 1, Col: 3}, "=sum(")
+	err := s.SetCell(tsvsheet.Address{Row: 1, Col: 3}, "=sum(")
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrSyntax)
+	assert.ErrorIs(t, err, tsvsheet.ErrSyntax)
 
 	after := s.Snapshot()
 	assert.Equal(t, before.Computed, after.Computed)
@@ -259,7 +258,7 @@ func TestSetCell_GrowsGridOnAppend(t *testing.T) {
 	t.Parallel()
 
 	s := newSession(t)
-	require.NoError(t, s.SetCell(sheet.Address{Row: 3, Col: 0}, "Carol")) // one past last row
+	require.NoError(t, s.SetCell(tsvsheet.Address{Row: 3, Col: 0}, "Carol")) // one past last row
 	state := s.Snapshot()
 	require.Len(t, state.Source, 4)
 	assert.Equal(t, "Carol", state.Source[3][0])
@@ -271,7 +270,7 @@ func TestDirtyLifecycle(t *testing.T) {
 	s := newSession(t)
 	assert.False(t, s.Snapshot().IsDirty)
 
-	require.NoError(t, s.SetCell(sheet.Address{Row: 0, Col: 0}, "9"))
+	require.NoError(t, s.SetCell(tsvsheet.Address{Row: 0, Col: 0}, "9"))
 	assert.True(t, s.Snapshot().IsDirty)
 
 	s.MarkSaved()
@@ -296,7 +295,7 @@ func TestSnapshot_IsIsolatedCopy(t *testing.T) {
 func TestExplain(t *testing.T) {
 	t.Parallel()
 
-	trace, err := newSession(t).Explain(sheet.Address{Row: 1, Col: 3}) // D2 = B2+C2
+	trace, err := newSession(t).Explain(tsvsheet.Address{Row: 1, Col: 3}) // D2 = B2+C2
 	require.NoError(t, err)
 	assert.Equal(t, "5", trace.Value)
 	assert.Equal(t, "B2 + C2", trace.Formula)
@@ -305,9 +304,9 @@ func TestExplain(t *testing.T) {
 func TestExplain_OutOfGrid(t *testing.T) {
 	t.Parallel()
 
-	_, err := newSession(t).Explain(sheet.Address{Row: 99, Col: 0})
+	_, err := newSession(t).Explain(tsvsheet.Address{Row: 99, Col: 0})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrNotFound)
+	assert.ErrorIs(t, err, tsvsheet.ErrNotFound)
 }
 
 func TestConcurrentAccess(t *testing.T) {
@@ -319,7 +318,7 @@ func TestConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = s.SetCell(sheet.Address{Row: 0, Col: 0}, "x")
+			_ = s.SetCell(tsvsheet.Address{Row: 0, Col: 0}, "x")
 			_ = s.Snapshot()
 			_ = s.Source()
 			s.MarkSaved()

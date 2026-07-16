@@ -4,10 +4,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/uplang/go-tsvsheet"
 	"github.com/urfave/cli/v3"
 
 	"github.com/uplang/tsvsheet.go/internal/loader"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // runRender parses the spreadsheet, computes it (resolving SHEET(...) references
@@ -18,8 +18,8 @@ func runRender(
 	streams Streams,
 	source sourcePath,
 	isUnconfined pathAccess,
-	limits sheet.Limits,
-	fetcher sheet.Fetcher,
+	limits tsvsheet.Limits,
+	fetcher tsvsheet.Fetcher,
 ) error {
 	reader, release, err := source.open(streams.In)
 	if err != nil {
@@ -31,7 +31,7 @@ func runRender(
 	if err != nil {
 		return err
 	}
-	return sheet.WriteTSV(streams.Out, parsed.ComputeWith(computeOptions(source, isUnconfined, limits, fetcher)))
+	return tsvsheet.WriteTSV(streams.Out, parsed.ComputeWith(computeOptions(source, isUnconfined, limits, fetcher)))
 }
 
 // computeOptions builds the compute options for a source: a filesystem sheet
@@ -41,17 +41,17 @@ func runRender(
 func computeOptions(
 	source sourcePath,
 	isUnconfined pathAccess,
-	limits sheet.Limits,
-	fetcher sheet.Fetcher,
-) sheet.ComputeOptions {
+	limits tsvsheet.Limits,
+	fetcher tsvsheet.Fetcher,
+) tsvsheet.ComputeOptions {
 	if source.isStdin() {
-		return sheet.ComputeOptions{At: time.Now(), Limits: limits, Fetcher: fetcher}
+		return tsvsheet.ComputeOptions{At: time.Now(), Limits: limits, Fetcher: fetcher}
 	}
 	path := filepath.Clean(string(source))
-	return sheet.ComputeOptions{
+	return tsvsheet.ComputeOptions{
 		At:      time.Now(),
 		Loader:  sheetLoader(loader.Dir(filepath.Dir(path)), isUnconfined),
-		Base:    sheet.Path(filepath.Base(path)),
+		Base:    tsvsheet.Path(filepath.Base(path)),
 		Limits:  limits,
 		Fetcher: fetcher,
 	}
@@ -74,8 +74,10 @@ Examples:
 		Flags: append([]cli.Flag{
 			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
 		}, importFlags()...),
-		Action: importedAction(func(s Streams, args positional, limits sheet.Limits, fetcher sheet.Fetcher) error {
-			return runRender(s, args.at(0), pathAccess(isUnconfined), limits, fetcher)
-		}),
+		Action: importedAction(
+			func(s Streams, args positional, limits tsvsheet.Limits, fetcher tsvsheet.Fetcher) error {
+				return runRender(s, args.at(0), pathAccess(isUnconfined), limits, fetcher)
+			},
+		),
 	}
 }

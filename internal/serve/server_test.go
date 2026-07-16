@@ -12,11 +12,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uplang/go-tsvsheet"
 
 	"github.com/uplang/tsvsheet.go/internal/refresh"
 	"github.com/uplang/tsvsheet.go/internal/serve"
 	"github.com/uplang/tsvsheet.go/internal/session"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // sampleSheet is a small spreadsheet: three data columns and a D-column formula
@@ -125,7 +125,7 @@ func TestExplain_OK(t *testing.T) {
 	rec := do(t, srv, http.MethodGet, "/api/explain?cell=D2", "")
 	require.Equal(t, http.StatusOK, rec.Code)
 
-	var trace sheet.Trace
+	var trace tsvsheet.Trace
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &trace))
 	assert.Equal(t, "5", trace.Value)
 	assert.Equal(t, "B2 + C2", trace.Formula)
@@ -156,13 +156,13 @@ func TestReferences_OK(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var refs struct {
-		Precedents []sheet.Span    `json:"precedents"`
-		Dependents []sheet.Address `json:"dependents"`
+		Precedents []tsvsheet.Span    `json:"precedents"`
+		Dependents []tsvsheet.Address `json:"dependents"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &refs))
 	require.Len(t, refs.Precedents, 2)
-	assert.Equal(t, sheet.Address{Row: 1, Col: 1}, refs.Precedents[0].From) // B2
-	assert.Equal(t, sheet.Address{Row: 1, Col: 2}, refs.Precedents[1].From) // C2
+	assert.Equal(t, tsvsheet.Address{Row: 1, Col: 1}, refs.Precedents[0].From) // B2
+	assert.Equal(t, tsvsheet.Address{Row: 1, Col: 2}, refs.Precedents[1].From) // C2
 	assert.Empty(t, refs.Dependents)
 }
 
@@ -223,11 +223,11 @@ func TestStructure_BadBody(t *testing.T) {
 func TestEmbedded_OK(t *testing.T) {
 	t.Parallel()
 
-	loader := func(_, ref sheet.Path) (sheet.Sheet, sheet.Path, error) {
-		s, err := sheet.Parse([]byte("=output(9)\n"))
+	loader := func(_, ref tsvsheet.Path) (tsvsheet.Sheet, tsvsheet.Path, error) {
+		s, err := tsvsheet.Parse([]byte("=output(9)\n"))
 		return s, ref, err
 	}
-	sess, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root", sheet.DefaultLimits(), nil)
+	sess, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root", tsvsheet.DefaultLimits(), nil)
 	require.NoError(t, err)
 	srv := serve.NewServer(sess, func() error { return nil }, nil)
 

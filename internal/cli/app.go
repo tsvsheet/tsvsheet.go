@@ -5,9 +5,8 @@ import (
 	"log/slog"
 
 	golog "github.com/gomatic/go-log"
+	"github.com/uplang/go-tsvsheet"
 	"github.com/urfave/cli/v3"
-
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 const (
@@ -112,11 +111,11 @@ func maxCellsFlag() cli.Flag {
 // positive cap bounds the cells, grid dimension, and bytes any single formula
 // result or edit may reach; zero (the default) keeps the engine's generous
 // DefaultLimits.
-func maxCellsLimits(c *cli.Command) sheet.Limits {
+func maxCellsLimits(c *cli.Command) tsvsheet.Limits {
 	if n := c.Root().Int(flagMaxCells); n > 0 {
-		return sheet.Limits{ResultCells: n, GridDim: n, ResultBytes: n}
+		return tsvsheet.Limits{ResultCells: n, GridDim: n, ResultBytes: n}
 	}
-	return sheet.DefaultLimits()
+	return tsvsheet.DefaultLimits()
 }
 
 // loggerFlags builds the global --log-level / --log-format flags.

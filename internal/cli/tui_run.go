@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/uplang/go-tsvsheet"
 
 	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/loader"
 	"github.com/uplang/tsvsheet.go/internal/refresh"
 	"github.com/uplang/tsvsheet.go/internal/session"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 	"github.com/uplang/tsvsheet.go/internal/tui"
 )
 
@@ -45,12 +45,12 @@ func runTUI(streams Streams, cfg tuiConfig) error {
 func loadEditable(
 	source sourcePath,
 	isUnconfined pathAccess,
-	limits sheet.Limits,
-	fetcher sheet.Fetcher,
+	limits tsvsheet.Limits,
+	fetcher tsvsheet.Fetcher,
 ) (*session.Session, func() error, error) {
 	if source.isStdin() {
 		const msg = "requires a spreadsheet file path (e.g. `tsvsheet serve sheet.tsvt`)"
-		return nil, nil, constants.ErrInvalidValue.With(nil, "message", msg)
+		return nil, nil, tsvsheet.ErrInvalidValue.With(nil, "message", msg)
 	}
 	path := filepath.Clean(string(source))
 	src, err := os.ReadFile(path)
@@ -61,7 +61,7 @@ func loadEditable(
 	// directory (or any path with isUnconfined), with this file as the base;
 	// content-typed IMPORT* cells fetch through the injected fetcher (nil off).
 	load := sheetLoader(loader.Dir(filepath.Dir(path)), isUnconfined)
-	sess, err := session.NewEmbeddable(src, load, sheet.Path(filepath.Base(path)), limits, fetcher)
+	sess, err := session.NewEmbeddable(src, load, tsvsheet.Path(filepath.Base(path)), limits, fetcher)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -1,12 +1,5 @@
 # Repo-local gate scoping (shared Makefile -includes this last).
-# src/grammar is the committed ANTLR-generated parser (Code generated … DO NOT
-# EDIT) lifted from uplang/tsvsheet; it is excluded from the coverage and vet
-# gates. vet must be narrowed too because ANTLR emits a deliberate trailing
-# `goto errorExit` after `return` in every rule (an unreachable-code "trick"),
-# which `go vet` flags — machine-authored lines the gate does not own.
-COVER_PKGS = $(shell go list ./... | grep -v /src/grammar)
-VET_PKGS = $(shell go list ./... | grep -v /src/grammar)
-
+#
 # The browser playground: compile the engine (cmd/wasm, js/wasm-tagged so it is
 # invisible to the host gate) to WebAssembly and stage its runtime alongside the
 # authored web/playground/index.html into dist/ (gitignored). Deploying to the

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	httpserver "github.com/gomatic/go-httpserver"
+	"github.com/uplang/go-tsvsheet"
 
 	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/importer"
@@ -99,7 +100,7 @@ func buildRefresh(spec refresh.Spec, sess *session.Session) (refresh.Next, error
 	if spec != "" {
 		next, err := refresh.Parse(spec)
 		if err != nil {
-			return nil, constants.ErrInvalidValue.With(err, flagRefreshInterval, string(spec))
+			return nil, tsvsheet.ErrInvalidValue.With(err, flagRefreshInterval, string(spec))
 		}
 		return next, nil
 	}
@@ -116,7 +117,7 @@ func saver(sess *session.Session, source sourcePath) func() error {
 	path := filepath.Clean(string(source))
 	return func() error {
 		if err := os.WriteFile(path, sess.Source(), filePerm); err != nil {
-			return constants.ErrWriteFile.With(err, path)
+			return tsvsheet.ErrWriteFile.With(err, path)
 		}
 		return nil
 	}

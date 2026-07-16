@@ -22,12 +22,7 @@ const (
 	ErrImportTooLarge     errs.Const = "import body too large"
 	ErrImportURL          errs.Const = "import url invalid"
 	ErrInvalidName        errs.Const = "invalid name"
-	ErrInvalidValue       errs.Const = "invalid value"
 	ErrMissingArgument    errs.Const = "missing required argument"
-	ErrNotFound           errs.Const = "not found"
 	ErrOpenFile           errs.Const = "failed to open file"
-	ErrReadInput          errs.Const = "failed to read input"
-	ErrSyntax             errs.Const = "syntax error"
 	ErrUnsupported        errs.Const = "unsupported construct"
-	ErrWriteFile          errs.Const = "failed to write file"
 )

@@ -14,10 +14,10 @@ func TestSentinels(t *testing.T) {
 	t.Parallel()
 	want := assert.New(t)
 
-	want.Equal("not found", ErrNotFound.Error())
+	want.Equal("unsupported construct", ErrUnsupported.Error())
 	want.Equal("invalid name", ErrInvalidName.Error())
 
 	wrapped := fmt.Errorf("%w: %s", ErrOpenFile, "config.json")
 	want.ErrorIs(wrapped, ErrOpenFile)
-	want.NotErrorIs(wrapped, ErrNotFound)
+	want.NotErrorIs(wrapped, ErrUnsupported)
 }

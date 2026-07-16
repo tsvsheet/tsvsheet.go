@@ -3,10 +3,10 @@ package cli
 import (
 	"context"
 
+	"github.com/uplang/go-tsvsheet"
 	"github.com/urfave/cli/v3"
 
 	"github.com/uplang/tsvsheet.go/internal/importer"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // tuiConfig binds the tui command's spreadsheet path, path-access mode,
@@ -14,11 +14,11 @@ import (
 // resource limits the editing session enforces, and the content-typed import
 // fetcher (nil when imports are off) with its refresh cache.
 type tuiConfig struct {
-	fetcher      sheet.Fetcher
+	fetcher      tsvsheet.Fetcher
 	cache        *importer.Cache
 	source       sourcePath
 	refresh      string
-	limits       sheet.Limits
+	limits       tsvsheet.Limits
 	isUnconfined pathAccess
 }
 

@@ -9,10 +9,10 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/uplang/go-tsvsheet"
 
 	"github.com/uplang/tsvsheet.go/internal/refresh"
 	"github.com/uplang/tsvsheet.go/internal/session"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // Saver persists the spreadsheet; injected so the model stays filesystem-free.
@@ -175,7 +175,7 @@ func (m Model) keyEdit(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 // commit writes the buffer to the selected cell. A malformed formula keeps the
 // model in edit mode (buffer preserved) and shows the error.
 func (m Model) commit() Model {
-	if err := m.session.SetCell(sheet.Address{Row: m.row, Col: m.col}, m.buffer); err != nil {
+	if err := m.session.SetCell(tsvsheet.Address{Row: m.row, Col: m.col}, m.buffer); err != nil {
 		m.status = err.Error()
 		return m
 	}

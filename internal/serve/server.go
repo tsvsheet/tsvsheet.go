@@ -9,10 +9,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/uplang/go-tsvsheet"
+
 	"github.com/uplang/tsvsheet.go/internal/constants"
 	"github.com/uplang/tsvsheet.go/internal/refresh"
 	"github.com/uplang/tsvsheet.go/internal/session"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // Saver persists the spreadsheet's current source. It is injected so the server
@@ -137,7 +138,7 @@ func (srv Server) handleCell(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	if err := srv.session.SetCell(sheet.Address{Row: req.Row, Col: req.Col}, req.Text); err != nil {
+	if err := srv.session.SetCell(tsvsheet.Address{Row: req.Row, Col: req.Col}, req.Text); err != nil {
 		writeError(w, http.StatusUnprocessableEntity, err)
 		return
 	}
@@ -161,7 +162,7 @@ func (srv Server) handleSave(w http.ResponseWriter, _ *http.Request) {
 
 // handleExplain traces one cell named by the `cell` query parameter.
 func (srv Server) handleExplain(w http.ResponseWriter, r *http.Request) {
-	at, err := sheet.ParseAddress(sheet.AddressText(r.URL.Query().Get("cell")))
+	at, err := tsvsheet.ParseAddress(tsvsheet.AddressText(r.URL.Query().Get("cell")))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -200,8 +201,8 @@ func (srv Server) handleStructure(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	if !srv.applyStructure(req.Op, sheet.Address{Row: req.Row, Col: req.Col}) {
-		writeError(w, http.StatusBadRequest, constants.ErrInvalidValue.With(nil, "op", string(req.Op)))
+	if !srv.applyStructure(req.Op, tsvsheet.Address{Row: req.Row, Col: req.Col}) {
+		writeError(w, http.StatusBadRequest, tsvsheet.ErrInvalidValue.With(nil, "op", string(req.Op)))
 		return
 	}
 	writeJSON(w, http.StatusOK, srv.session.Snapshot())
@@ -209,7 +210,7 @@ func (srv Server) handleStructure(w http.ResponseWriter, r *http.Request) {
 
 // applyStructure dispatches a structural op to the session; the boolean reports
 // whether the op was recognised.
-func (srv Server) applyStructure(op structureOp, at sheet.Address) bool {
+func (srv Server) applyStructure(op structureOp, at tsvsheet.Address) bool {
 	switch op {
 	case opInsertRow:
 		srv.session.InsertRow(at)
@@ -228,15 +229,15 @@ func (srv Server) applyStructure(op structureOp, at sheet.Address) bool {
 // referencesResponse is the GET /api/references body: the selected cell's
 // precedents (spans its formula reads) and dependents (cells that read it).
 type referencesResponse struct {
-	Precedents []sheet.Span    `json:"precedents"`
-	Dependents []sheet.Address `json:"dependents"`
+	Precedents []tsvsheet.Span    `json:"precedents"`
+	Dependents []tsvsheet.Address `json:"dependents"`
 }
 
 // handleReferences returns the dependency edges of the cell named by the `cell`
 // query parameter, for highlighting. An off-grid or non-formula cell simply has
 // empty edges — only a malformed address is a 400.
 func (srv Server) handleReferences(w http.ResponseWriter, r *http.Request) {
-	at, err := sheet.ParseAddress(sheet.AddressText(r.URL.Query().Get("cell")))
+	at, err := tsvsheet.ParseAddress(tsvsheet.AddressText(r.URL.Query().Get("cell")))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -248,21 +249,21 @@ func (srv Server) handleReferences(w http.ResponseWriter, r *http.Request) {
 // embeddedResponse is the GET /api/embedded body: the sub-sheet a SHEET(...)
 // cell embeds — its resolved path and its own computed grid.
 type embeddedResponse struct {
-	Path string     `json:"path"`
-	Grid sheet.Grid `json:"grid"`
+	Path string        `json:"path"`
+	Grid tsvsheet.Grid `json:"grid"`
 }
 
 // handleEmbedded returns the nested sub-sheet embedded by the cell named in the
 // `cell` query parameter, or 404 when that cell is not a resolvable SHEET call.
 func (srv Server) handleEmbedded(w http.ResponseWriter, r *http.Request) {
-	at, err := sheet.ParseAddress(sheet.AddressText(r.URL.Query().Get("cell")))
+	at, err := tsvsheet.ParseAddress(tsvsheet.AddressText(r.URL.Query().Get("cell")))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	path, grid, ok := srv.session.Embedded(at)
 	if !ok {
-		writeError(w, http.StatusNotFound, constants.ErrNotFound.With(nil, "cell", at.String()))
+		writeError(w, http.StatusNotFound, tsvsheet.ErrNotFound.With(nil, "cell", at.String()))
 		return
 	}
 	writeJSON(w, http.StatusOK, embeddedResponse{Path: string(path), Grid: grid})

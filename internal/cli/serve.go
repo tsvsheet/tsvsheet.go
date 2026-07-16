@@ -3,10 +3,10 @@ package cli
 import (
 	"context"
 
+	"github.com/uplang/go-tsvsheet"
 	"github.com/urfave/cli/v3"
 
 	"github.com/uplang/tsvsheet.go/internal/importer"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // serveConfig binds the serve command's spreadsheet path, bind address,
@@ -14,12 +14,12 @@ import (
 // resource limits the editing session enforces, and the content-typed import
 // fetcher (nil when imports are off) with its refresh cache.
 type serveConfig struct {
-	fetcher      sheet.Fetcher
+	fetcher      tsvsheet.Fetcher
 	cache        *importer.Cache
 	source       sourcePath
 	host         string
 	refresh      string
-	limits       sheet.Limits
+	limits       tsvsheet.Limits
 	port         int
 	isUnconfined pathAccess
 }

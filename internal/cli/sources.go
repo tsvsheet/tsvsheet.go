@@ -1,6 +1,6 @@
-// Package cli is the tsvsheet command tier: it wires the engine (internal/tsvt,
-// internal/sheet) to urfave/cli commands with strict unix stdin/stdout
-// discipline. A .tsvt file IS the spreadsheet; every command takes it as a
+// Package cli is the tsvsheet command tier: it wires the engine (the
+// github.com/uplang/go-tsvsheet library) to urfave/cli commands with strict
+// unix stdin/stdout discipline. A .tsvt file IS the spreadsheet; every command takes it as a
 // positional argument. Command logic lives in stream-injected functions so it
 // is fully testable; the cli.Command wrappers only bind flags and streams.
 package cli
@@ -9,8 +9,9 @@ import (
 	"io"
 	"os"
 
+	"github.com/uplang/go-tsvsheet"
+
 	"github.com/uplang/tsvsheet.go/internal/constants"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // Streams are a command's injected I/O: input, output, and diagnostics. Real
@@ -52,16 +53,16 @@ func noClose() error { return nil }
 func readAll(r io.Reader) ([]byte, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return nil, constants.ErrReadInput.With(err)
+		return nil, tsvsheet.ErrReadInput.With(err)
 	}
 	return data, nil
 }
 
 // parseSheet reads a spreadsheet source fully and parses it.
-func parseSheet(r io.Reader) (sheet.Sheet, error) {
+func parseSheet(r io.Reader) (tsvsheet.Sheet, error) {
 	src, err := readAll(r)
 	if err != nil {
-		return sheet.Sheet{}, err
+		return tsvsheet.Sheet{}, err
 	}
-	return sheet.Parse(src)
+	return tsvsheet.Parse(src)
 }

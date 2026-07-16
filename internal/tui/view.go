@@ -4,8 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-
-	"github.com/uplang/tsvsheet.go/internal/sheet"
+	"github.com/uplang/go-tsvsheet"
 )
 
 // cellWidth is the fixed display width of a grid cell.
@@ -55,7 +54,7 @@ func (m Model) titleBar() string {
 // formulaBar shows the selected cell's address and its source (a literal or an
 // =formula), reflecting the in-progress edit buffer while editing.
 func (m Model) formulaBar() string {
-	addr := sheet.Address{Row: m.row, Col: m.col}.String()
+	addr := tsvsheet.Address{Row: m.row, Col: m.col}.String()
 	source := m.sourceAt(m.row, m.col)
 	if m.mode == modeEdit {
 		source = m.buffer + "▏"
@@ -138,8 +137,8 @@ func clip(s displayText) string {
 
 // isErrorValue reports whether a cell value is a spreadsheet error value.
 func isErrorValue(value displayText) bool {
-	switch sheet.ErrorValue(value) {
-	case sheet.ErrRef, sheet.ErrValue, sheet.ErrName, sheet.ErrDiv, sheet.ErrCirc:
+	switch tsvsheet.ErrorValue(value) {
+	case tsvsheet.ErrRef, tsvsheet.ErrValue, tsvsheet.ErrName, tsvsheet.ErrDiv, tsvsheet.ErrCirc:
 		return true
 	default:
 		return false

@@ -3,10 +3,8 @@ package cli
 import (
 	"encoding/json"
 
+	"github.com/uplang/go-tsvsheet"
 	"github.com/urfave/cli/v3"
-
-	"github.com/uplang/tsvsheet.go/internal/constants"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // sheetView is the JSON projection of a spreadsheet: the source grid (rows) and
@@ -14,8 +12,8 @@ import (
 // a .tsvt round-trips through JSON (rows are lossless) and the grid is clean to
 // munge with jq (e.g. `.rows[1][3]`, `.values`).
 type sheetView struct {
-	Rows   sheet.Grid `json:"rows"`
-	Values sheet.Grid `json:"values,omitempty"`
+	Rows   tsvsheet.Grid `json:"rows"`
+	Values tsvsheet.Grid `json:"values,omitempty"`
 }
 
 // valueOutput requests the computed grid in the JSON output (the --value flag).
@@ -29,8 +27,8 @@ func runParse(
 	source sourcePath,
 	isValues valueOutput,
 	isUnconfined pathAccess,
-	limits sheet.Limits,
-	fetcher sheet.Fetcher,
+	limits tsvsheet.Limits,
+	fetcher tsvsheet.Fetcher,
 ) error {
 	reader, release, err := source.open(streams.In)
 	if err != nil {
@@ -61,9 +59,9 @@ func runFromJSON(streams Streams, source sourcePath) error {
 
 	var view sheetView
 	if err := json.NewDecoder(reader).Decode(&view); err != nil {
-		return constants.ErrSyntax.With(err)
+		return tsvsheet.ErrSyntax.With(err)
 	}
-	return sheet.WriteTSV(streams.Out, view.Rows)
+	return tsvsheet.WriteTSV(streams.Out, view.Rows)
 }
 
 // parseCommand builds the `parse` command.
@@ -92,9 +90,11 @@ Examples:
 			},
 			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
 		}, importFlags()...),
-		Action: importedAction(func(s Streams, args positional, limits sheet.Limits, fetcher sheet.Fetcher) error {
-			return runParse(s, args.at(0), valueOutput(isValues), pathAccess(isUnconfined), limits, fetcher)
-		}),
+		Action: importedAction(
+			func(s Streams, args positional, limits tsvsheet.Limits, fetcher tsvsheet.Fetcher) error {
+				return runParse(s, args.at(0), valueOutput(isValues), pathAccess(isUnconfined), limits, fetcher)
+			},
+		),
 	}
 }
 

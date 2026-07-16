@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uplang/go-tsvsheet"
 
 	"github.com/uplang/tsvsheet.go/internal/loader"
-	"github.com/uplang/tsvsheet.go/internal/sheet"
 )
 
 // write creates a file (making parent directories) under dir.
@@ -32,7 +32,7 @@ func TestFS_ConfinedResolvesWithinRoot(t *testing.T) {
 
 	sub, resolved, err := ld("main.tsvt", "child.tsvt")
 	require.NoError(t, err)
-	assert.Equal(t, sheet.Path("child.tsvt"), resolved) // root-relative
+	assert.Equal(t, tsvsheet.Path("child.tsvt"), resolved) // root-relative
 	assert.Equal(t, "42", sub.Compute()[0][0])
 }
 
@@ -98,7 +98,7 @@ func TestUnconfined_BareResolvesAgainstRoot(t *testing.T) {
 
 	sub, resolved, err := ld("main.tsvt", "child.tsvt")
 	require.NoError(t, err)
-	assert.Equal(t, sheet.Path(filepath.Join(dir, "child.tsvt")), resolved)
+	assert.Equal(t, tsvsheet.Path(filepath.Join(dir, "child.tsvt")), resolved)
 	assert.Equal(t, "9", sub.Compute()[0][0])
 }
 
@@ -109,9 +109,9 @@ func TestUnconfined_RelativeFromSubdirBase(t *testing.T) {
 	write(t, dir, "sub/leaf.tsvt", "=output(7)\n")
 	ld := loader.Unconfined(loader.Dir(dir))
 
-	_, resolved, err := ld(sheet.Path(filepath.Join(dir, "sub", "mid.tsvt")), "leaf.tsvt")
+	_, resolved, err := ld(tsvsheet.Path(filepath.Join(dir, "sub", "mid.tsvt")), "leaf.tsvt")
 	require.NoError(t, err)
-	assert.Equal(t, sheet.Path(filepath.Join(dir, "sub", "leaf.tsvt")), resolved)
+	assert.Equal(t, tsvsheet.Path(filepath.Join(dir, "sub", "leaf.tsvt")), resolved)
 }
 
 func TestUnconfined_AbsoluteAndEscapeAllowed(t *testing.T) {
@@ -121,9 +121,9 @@ func TestUnconfined_AbsoluteAndEscapeAllowed(t *testing.T) {
 	abs := write(t, dir, "abs.tsvt", "=output(1)\n")
 	ld := loader.Unconfined(loader.Dir(t.TempDir())) // an unrelated root
 
-	_, resolved, err := ld("main.tsvt", sheet.Path(abs))
+	_, resolved, err := ld("main.tsvt", tsvsheet.Path(abs))
 	require.NoError(t, err)
-	assert.Equal(t, sheet.Path(abs), resolved)
+	assert.Equal(t, tsvsheet.Path(abs), resolved)
 }
 
 func TestUnconfined_MissingFile(t *testing.T) {
