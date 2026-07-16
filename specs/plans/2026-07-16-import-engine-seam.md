@@ -8,6 +8,8 @@
 
 **Tech Stack:** Go, standard `testing` with `stretchr/testify` (permitted by the capability spec), the gomatic quality gate (`make check`).
 
+> **Status: complete** (commit `30630a8`). Implemented via the external `package sheet_test` (all repo tests are external, asserting through the public `HasImports()`/`Compute` surface rather than the unexported symbols shown in the tasks below). New code builds, is staticcheck-clean, and is 100%-covered by three tests. The repo-wide `make check` is pre-existingly red (floated `yze`/`stickler` findings in `limits.go`/`app.go`/`tui/grid.go`, untouched here) — a separate modernization task.
+
 ## Global Constraints
 
 _Copied verbatim from [specs/capabilities/import.md](../capabilities/import.md) and [ADR 0006](../decisions/0006-content-typed-import.md); every task's requirements implicitly include these._
