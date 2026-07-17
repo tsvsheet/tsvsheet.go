@@ -212,6 +212,21 @@ func TestStructure_UnknownOp(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestStructure_NegativeIndexRejected(t *testing.T) {
+	t.Parallel()
+
+	// A negative index must be a clean 400 at the boundary, never an engine
+	// slice-bounds panic (insert-row with row:-1 crashes the released engine).
+	srv, _ := testServer(t)
+	for _, body := range []string{
+		`{"op":"insert-row","row":-1,"col":0}`,
+		`{"op":"insert-col","row":0,"col":-1}`,
+	} {
+		rec := do(t, srv, http.MethodPost, "/api/structure", body)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	}
+}
+
 func TestStructure_BadBody(t *testing.T) {
 	t.Parallel()
 

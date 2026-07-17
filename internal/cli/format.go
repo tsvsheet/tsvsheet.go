@@ -96,7 +96,8 @@ func htmlRow(row []string) string {
 
 // writeMarkdown writes the grid as a GitHub-flavored pipe table: the first row is
 // the header, followed by a --- separator row, then the remaining rows as the
-// body. A | in a cell is escaped as \|. An empty grid yields no output.
+// body. Each cell is escaped for pipe-table safety. An empty grid yields no
+// output.
 func writeMarkdown(w io.Writer, grid tsvsheet.Grid) error {
 	if len(grid) == 0 {
 		return nil
@@ -109,12 +110,18 @@ func writeMarkdown(w io.Writer, grid tsvsheet.Grid) error {
 	return rendering(strings.Join(rows, "")).write(w)
 }
 
-// markdownRow renders one grid row as a pipe-delimited table row, escaping | in
-// each cell so a value never breaks the column structure.
+// markdownRow renders one grid row as a pipe-delimited table row. Each cell is
+// escaped so no value breaks the table: a | is backslash-escaped so it never
+// starts a new column, and a newline — which a cell can hold via CHAR(10) —
+// becomes a <br> so it never splits the row into two table lines (GFM renders
+// <br> as an in-cell line break).
 func markdownRow(row []string) string {
 	cells := make([]string, len(row))
 	for i, cell := range row {
-		cells[i] = strings.ReplaceAll(cell, "|", `\|`)
+		escaped := strings.ReplaceAll(cell, "|", `\|`)
+		escaped = strings.ReplaceAll(escaped, "\r\n", "<br>")
+		escaped = strings.ReplaceAll(escaped, "\n", "<br>")
+		cells[i] = strings.ReplaceAll(escaped, "\r", "<br>")
 	}
 	return "| " + strings.Join(cells, " | ") + " |\n"
 }

@@ -195,10 +195,21 @@ type structureRequest struct {
 }
 
 // handleStructure applies a row/column insert or delete and returns the new
-// state; an unknown op is a 400.
+// state; an unknown op, or a negative row/col, is a 400. The negative-index
+// guard is defense in depth: the engine's InsertRow/InsertCol clamp the upper
+// bound but a released engine panics on a negative index, so an untrusted
+// request must be rejected at the boundary before it reaches the session.
 func (srv Server) handleStructure(w http.ResponseWriter, r *http.Request) {
 	var req structureRequest
 	if !decode(w, r, &req) {
+		return
+	}
+	if req.Row < 0 || req.Col < 0 {
+		writeError(
+			w,
+			http.StatusBadRequest,
+			tsvsheet.ErrInvalidValue.With(nil, "cell", "row and col must be non-negative"),
+		)
 		return
 	}
 	if !srv.applyStructure(req.Op, tsvsheet.Address{Row: req.Row, Col: req.Col}) {

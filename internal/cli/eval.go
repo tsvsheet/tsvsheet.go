@@ -59,6 +59,9 @@ func resolveExpr(in io.Reader, arg evalArg) (evalExpr, error) {
 	if expr == "" {
 		return "", constants.ErrMissingArgument.With(nil, "argument", "expression")
 	}
+	if strings.ContainsAny(expr, "\t\n") {
+		return "", constants.ErrMultiCellExpression.With(nil)
+	}
 	return evalExpr(expr), nil
 }
 

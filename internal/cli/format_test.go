@@ -57,6 +57,14 @@ func TestFormat_Serializations(t *testing.T) {
 			want: "| H1 | H2 |\n| --- | --- |\n| a\\|b | c |\n",
 		},
 		{
+			// A newline in a cell (reachable via CHAR(10)) becomes <br> so it
+			// cannot break the row into two table lines.
+			name: "markdown newline",
+			f:    formatMarkdown,
+			grid: tsvsheet.Grid{{"H1", "H2"}, {"a\nb", "c\r\nd"}},
+			want: "| H1 | H2 |\n| --- | --- |\n| a<br>b | c<br>d |\n",
+		},
+		{
 			// md is an alias for markdown.
 			name: "md alias",
 			f:    formatMD,

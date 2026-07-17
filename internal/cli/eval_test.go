@@ -84,6 +84,23 @@ func TestRunEval_SyntaxError(t *testing.T) {
 	assert.ErrorIs(t, err, tsvsheet.ErrSyntax)
 }
 
+// TestRunEval_MultiCellRejected proves an expression carrying a TAB or newline
+// (the grid's own separators) is rejected, not silently truncated to its first
+// cell.
+func TestRunEval_MultiCellRejected(t *testing.T) {
+	t.Parallel()
+
+	for _, arg := range []string{"1+1\tSUM(9,9)", "1+1\n=99"} {
+		t.Run(arg, func(t *testing.T) {
+			t.Parallel()
+			streams, _, _ := streamsWith("")
+			err := runEval(streams, evalArg(arg), tsvsheet.DefaultLimits())
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrMultiCellExpression)
+		})
+	}
+}
+
 // TestRunEval_ReadError proves a stdin read failure is surfaced.
 func TestRunEval_ReadError(t *testing.T) {
 	t.Parallel()
