@@ -27,6 +27,7 @@ Commands:
   eval    <expression>     Compute a single formula, print its value
   serve   <sheet>          Browser spreadsheet editor
   tui     <sheet>          Terminal spreadsheet editor
+  completion <shell>       Print a shell completion script (bash, zsh, fish)
 
 Non-interactive commands write to stdout, so they compose in unix pipelines:
   tsvsheet render sheet.tsvt | column -t
@@ -50,7 +51,15 @@ const (
 	cmdEval     = "eval"
 	cmdServe    = "serve"
 	cmdTUI      = "tui"
+	cmdComplete = "completion"
 )
+
+// builtinCompletionName renames urfave/cli's auto-added (hidden) shell-completion
+// command so it does not collide with this repo's own visible `completion`
+// command. EnableShellCompletion still drives on-the-fly <TAB> completion via the
+// --generate-shell-completion flag; the renamed built-in only supplies the
+// per-shell script templates that the `completion` command delegates to.
+const builtinCompletionName = "__completion"
 
 // argSheetOptional is the ArgsUsage for commands whose sheet argument may be
 // omitted to read stdin.
@@ -71,14 +80,15 @@ var loggerConfig golog.LoggerConfig
 // diagnostics (and the top-level error) log consistently to stderr.
 func Command(v Version) *cli.Command {
 	return &cli.Command{
-		Name:                  name,
-		Usage:                 usage,
-		Description:           description,
-		Version:               string(v),
-		EnableShellCompletion: true,
-		DefaultCommand:        cmdRender,
-		Before:                configureLogger,
-		Flags:                 append(loggerFlags(), maxCellsFlag()),
+		Name:                       name,
+		Usage:                      usage,
+		Description:                description,
+		Version:                    string(v),
+		EnableShellCompletion:      true,
+		ShellCompletionCommandName: builtinCompletionName,
+		DefaultCommand:             cmdRender,
+		Before:                     configureLogger,
+		Flags:                      append(loggerFlags(), maxCellsFlag()),
 		Commands: []*cli.Command{
 			renderCommand(),
 			parseCommand(),
@@ -88,6 +98,7 @@ func Command(v Version) *cli.Command {
 			evalCommand(),
 			serveCommand(),
 			tuiCommand(),
+			completionCommand(),
 		},
 	}
 }

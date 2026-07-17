@@ -58,7 +58,7 @@ func TestCommand_HasAllCommands(t *testing.T) {
 	}
 	assert.ElementsMatch(
 		t,
-		[]string{cmdRender, cmdParse, cmdFromJSON, cmdCheck, cmdExplain, cmdEval, cmdServe, cmdTUI},
+		[]string{cmdRender, cmdParse, cmdFromJSON, cmdCheck, cmdExplain, cmdEval, cmdServe, cmdTUI, cmdComplete},
 		names,
 	)
 }

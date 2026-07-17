@@ -26,4 +26,5 @@ const (
 	ErrOpenFile           errs.Const = "failed to open file"
 	ErrUnknownFormat      errs.Const = "unknown render format"
 	ErrUnsupported        errs.Const = "unsupported construct"
+	ErrUnsupportedShell   errs.Const = "unsupported shell"
 )
