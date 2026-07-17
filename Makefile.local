@@ -1,13 +1,16 @@
 # Repo-local gate scoping (shared Makefile -includes this last).
 #
-# The browser playground: compile the engine (cmd/wasm, js/wasm-tagged so it is
-# invisible to the host gate) to WebAssembly and stage its runtime alongside the
-# authored web/playground/index.html into dist/ (gitignored). Deploying to the
-# docs site is copying dist/playground/* into ../docs.tsvsheet.go/static/playground/.
+# The browser playground: the engine WebAssembly is built and released by
+# go-tsvsheet (its versioned tsvsheet.wasm + wasm_exec.js assets), so this repo
+# no longer compiles its own cmd/wasm — it consumes the pinned release assets and
+# stages them alongside the authored web/playground/index.html into dist/
+# (gitignored). Deploying to the docs site is copying dist/playground/* into
+# ../docs.tsvsheet.go/static/playground/.
+TSVSHEET_WASM_VERSION := v0.3.0
 PLAYGROUND := dist/playground
 .PHONY: wasm
-wasm: ## Build the browser playground (WASM engine + runtime) into dist/playground
+wasm: ## Stage the browser playground: pinned tsvsheet.wasm + runtime + page
 	mkdir -p $(PLAYGROUND)
-	GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o $(PLAYGROUND)/main.wasm ./cmd/wasm
-	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" $(PLAYGROUND)/wasm_exec.js
+	gh release download $(TSVSHEET_WASM_VERSION) --repo uplang/go-tsvsheet --pattern 'tsvsheet.wasm' --output $(PLAYGROUND)/tsvsheet.wasm --clobber
+	gh release download $(TSVSHEET_WASM_VERSION) --repo uplang/go-tsvsheet --pattern 'wasm_exec.js' --output $(PLAYGROUND)/wasm_exec.js --clobber
 	cp web/playground/index.html $(PLAYGROUND)/index.html

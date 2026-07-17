@@ -60,8 +60,8 @@ github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0t
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/uplang/go-tsvsheet v0.2.0 h1:yl5yTrka/hhoQ1Xo6ef1Zr0GkG/htan0EbIL4AyfvW0=
-github.com/uplang/go-tsvsheet v0.2.0/go.mod h1:8CutXILKBb2W/ZCq636Xzg1c/6GRbFAgGtgWWM0HuSY=
+github.com/uplang/go-tsvsheet v0.3.0 h1:v4/hcuU0LmDEbEfV3++oixV4kpyqQpMGuU3rud1mkFo=
+github.com/uplang/go-tsvsheet v0.3.0/go.mod h1:8CutXILKBb2W/ZCq636Xzg1c/6GRbFAgGtgWWM0HuSY=
 github.com/uplang/isnow.go v0.6.0 h1:7y73gxwAmasRYhgf75D6bOSsdiquJ0SjzDLj9E6LfCc=
 github.com/uplang/isnow.go v0.6.0/go.mod h1:lEIG9g7N6RW+T8gUUAvNcl2qRW2nB+Xcbviq6IEexrc=
 github.com/urfave/cli/v3 v3.10.1 h1:7Kx9H50hrHbRbyxgO1KP6/BcbiGRz0uYh5YyQ30JEEY=

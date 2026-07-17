@@ -317,28 +317,28 @@
 			<span class="tools" role="group" aria-label="Structure">
 				<button
 					type="button"
-					data-op="insert-row"
+					data-op="insertRow"
 					title="Insert row above the selection"
 				>
 					＋row
 				</button>
 				<button
 					type="button"
-					data-op="delete-row"
+					data-op="deleteRow"
 					title="Delete the selected row"
 				>
 					－row
 				</button>
 				<button
 					type="button"
-					data-op="insert-col"
+					data-op="insertCol"
 					title="Insert column left of the selection"
 				>
 					＋col
 				</button>
 				<button
 					type="button"
-					data-op="delete-col"
+					data-op="deleteCol"
 					title="Delete the selected column"
 				>
 					－col
@@ -387,7 +387,6 @@
 		<script>
 			(() => {
 				const ERR = /^#[A-Z]+\/?[A-Z0-9]*[!?]$/;
-				const VOLATILE = /\b(today|now|isnow)\s*\(/i;
 				const SAMPLE =
 					"item\tqty\tprice\tamount\n" +
 					"Widgets\t3\t4.50\t=B2*C2\n" +
@@ -410,6 +409,9 @@
 				let sheet = { computed: [], source: [] };
 				let sel = { row: 0, col: 0 };
 				let refreshTimer = null;
+				// The engine is STATELESS: this page holds the canonical .tsvt
+				// source string and passes it into every call.
+				let source = "";
 
 				const colLabel = (n) => {
 					let s = "";
@@ -422,14 +424,34 @@
 				const tdAt = (r, c) =>
 					els.grid.querySelector(`td[data-row="${r}"][data-col="${c}"]`);
 
-				// engine — synchronous calls into the Go/WASM API on window.tsvsheet.
+				// serialize a 2-D source grid back to a .tsvt string: rows joined by
+				// "\n", cells within a row by "\t". This is how the engine's canonical
+				// `source` grid (returned by every structural edit) becomes the source
+				// string we hold — a round-trip the engine re-parses identically.
+				const serialize = (grid) => grid.map((row) => row.join("\t")).join("\n");
+
+				// adopt takes a view returned by an edit and, unless it carried an
+				// error, replaces our held source with the view's canonical grid.
+				const adopt = (view) => {
+					if (!view.error) source = serialize(view.source);
+					return view;
+				};
+
+				// engine — thin adapter over the STATELESS Go/WASM API on
+				// window.tsvsheet. Every function takes the current source string; the
+				// mutating ones (setCell, structure) adopt the recomputed source back.
 				const engine = {
-					load: (src) => JSON.parse(tsvsheet.load(src)),
-					setCell: (r, c, t) => JSON.parse(tsvsheet.setCell(r, c, t)),
-					structure: (op, r, c) => JSON.parse(tsvsheet.structure(op, r, c)),
-					references: (cell) => JSON.parse(tsvsheet.references(cell)),
-					recompute: () => JSON.parse(tsvsheet.recompute()),
-					source: () => tsvsheet.source(),
+					load: (text) => {
+						source = text;
+						return JSON.parse(tsvsheet.compute(source));
+					},
+					setCell: (r, c, t) =>
+						adopt(JSON.parse(tsvsheet.setCell(source, r, c, t))),
+					structure: (op, r, c) =>
+						adopt(JSON.parse(tsvsheet[op](source, r, c))),
+					references: (r, c) => JSON.parse(tsvsheet.references(source, r, c)),
+					recompute: () => JSON.parse(tsvsheet.compute(source)),
+					source: () => source,
 				};
 
 				function width(state) {
@@ -555,7 +577,7 @@
 					els.grid
 						.querySelectorAll("td.precedent, td.dependent")
 						.forEach((td) => td.classList.remove("precedent", "dependent"));
-					const refs = engine.references(a1(r, c));
+					const refs = engine.references(r, c);
 					if (refs.error) {
 						els.reflegend.classList.remove("on");
 						return;
@@ -656,7 +678,7 @@
 				}
 
 				function scheduleAutoRefresh() {
-					const volatile = VOLATILE.test(engine.source());
+					const volatile = !!sheet.volatile;
 					if (volatile && !refreshTimer) {
 						refreshTimer = setInterval(() => {
 							if (
@@ -694,7 +716,7 @@
 
 				// Boot: instantiate the Go/WASM engine, then load the sample sheet.
 				const go = new Go();
-				WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+				WebAssembly.instantiateStreaming(fetch("tsvsheet.wasm"), go.importObject)
 					.then((result) => {
 						go.run(result.instance);
 						render(engine.load(SAMPLE));

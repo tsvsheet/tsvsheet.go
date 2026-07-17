@@ -9,7 +9,7 @@ require (
 	github.com/gomatic/go-httpserver v0.2.0
 	github.com/gomatic/go-log v0.2.0
 	github.com/stretchr/testify v1.11.1
-	github.com/uplang/go-tsvsheet v0.2.0
+	github.com/uplang/go-tsvsheet v0.3.0
 	github.com/uplang/isnow.go v0.6.0
 	github.com/urfave/cli/v3 v3.10.1
 )
