@@ -24,5 +24,6 @@ const (
 	ErrInvalidName        errs.Const = "invalid name"
 	ErrMissingArgument    errs.Const = "missing required argument"
 	ErrOpenFile           errs.Const = "failed to open file"
+	ErrUnknownFormat      errs.Const = "unknown render format"
 	ErrUnsupported        errs.Const = "unsupported construct"
 )

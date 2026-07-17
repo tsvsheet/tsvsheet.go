@@ -42,7 +42,7 @@ func TestRunRender_ComputesFromStdin(t *testing.T) {
 	t.Parallel()
 
 	streams, out, _ := streamsWith(sampleSheet)
-	require.NoError(t, runRender(streams, "-", false, tsvsheet.DefaultLimits(), nil))
+	require.NoError(t, runRender(streams, "-", formatTSV, false, tsvsheet.DefaultLimits(), nil))
 	assert.Equal(t, "2\t3\t5\n4\t5\t9\n", out.String())
 }
 
@@ -51,7 +51,7 @@ func TestRunRender_ReadsFile(t *testing.T) {
 
 	path := writeTemp(t, "s.tsvt", sampleSheet)
 	streams, out, _ := streamsWith("")
-	require.NoError(t, runRender(streams, sourcePath(path), false, tsvsheet.DefaultLimits(), nil))
+	require.NoError(t, runRender(streams, sourcePath(path), formatTSV, false, tsvsheet.DefaultLimits(), nil))
 	assert.Contains(t, out.String(), "\t5\n")
 }
 
@@ -59,7 +59,7 @@ func TestRunRender_FileMissing(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("")
-	err := runRender(streams, "/no/such.tsvt", false, tsvsheet.DefaultLimits(), nil)
+	err := runRender(streams, "/no/such.tsvt", formatTSV, false, tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }
@@ -68,7 +68,7 @@ func TestRunRender_SyntaxError(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("1\t=sum(\n")
-	err := runRender(streams, "-", false, tsvsheet.DefaultLimits(), nil)
+	err := runRender(streams, "-", formatTSV, false, tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrSyntax)
 }
@@ -77,7 +77,7 @@ func TestRunRender_WriteError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: strings.NewReader(sampleSheet), Out: failWriter{}, Err: &bytes.Buffer{}}
-	err := runRender(streams, "-", false, tsvsheet.DefaultLimits(), nil)
+	err := runRender(streams, "-", formatTSV, false, tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrWriteFile)
 }
