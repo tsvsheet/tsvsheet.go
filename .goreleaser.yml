@@ -40,14 +40,33 @@ builds:
 archives:
   - id: default
     name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     files:
       - LICENSE*
       - README*
       - CHANGELOG*
 
+nfpms:
+  - id: packages
+    package_name: tsvsheet
+    vendor: tsvsheet
+    homepage: https://tsvsheet.com
+    maintainer: tsvsheet <noreply@tsvsheet.com>
+    description: A spreadsheet for plain text — compute .tsvt grids of values and =formulas.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256
+
+release:
+  mode: keep-existing
 
 snapshot:
   version_template: "0.0.0-SNAPSHOT-{{.ShortCommit}}"

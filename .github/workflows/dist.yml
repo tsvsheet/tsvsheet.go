@@ -1,0 +1,82 @@
+name: dist
+on:
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build distribution artifacts for (defaults to the newest v* tag)
+        required: false
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+concurrency:
+  group: dist-${{ github.ref }}
+  cancel-in-progress: false
+# Org modules are fetched directly from git, not the public proxy, matching
+# go.sum and the rest of the org's CI (the proxy can serve a stale blob for a
+# re-tagged dependency).
+env:
+  GOPRIVATE: github.com/gomatic/*,github.com/nicerobot/*,github.com/gloo-foo/*,github.com/sqlrest/*,github.com/uplang/*,github.com/tsvsheet/*,github.com/skykernel/*,github.com/xto-email/*
+jobs:
+  dist:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Resolve the tag to distribute: the dispatch input, else the newest v*
+      # tag (the release workflow that chained into this run just minted it).
+      # Skip when the release already carries checksums.txt — dist is idempotent
+      # per tag, and the release workflow runs on every push to main.
+      - id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          TAG="${INPUT_TAG}"
+          [ -n "${TAG}" ] || TAG="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
+          if [ -z "${TAG}" ]; then
+            echo 'no v* tag to distribute' >&2
+            exit 1
+          fi
+          case "${TAG}" in
+            v[0-9]*) ;;
+            *) echo "refusing suspicious tag: ${TAG}" >&2; exit 1 ;;
+          esac
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          if gh release view "${TAG}" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx 'checksums.txt'; then
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            echo "::notice::${TAG} already has distribution assets — skipping"
+          fi
+      - if: steps.tag.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: git checkout "${TAG}"
+      - if: steps.tag.outputs.skip != 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: true
+          cache: true
+      - if: steps.tag.outputs.skip != 'true'
+        run: go install github.com/goreleaser/goreleaser/v2@latest
+      - if: steps.tag.outputs.skip != 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: "$(go env GOPATH)/bin/goreleaser" release --clean
+      # SLSA build-provenance attestations for every distributed artifact —
+      # verifiable by anyone with: gh attestation verify <file> --owner tsvsheet
+      - if: steps.tag.outputs.skip != 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm

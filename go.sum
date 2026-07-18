@@ -56,8 +56,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/tsvsheet/go-isnow v0.1.0 h1:iWSx+JFHHUCEO7bRCkEke9wGsz7zXzGz4h7lid0wnts=
 github.com/tsvsheet/go-isnow v0.1.0/go.mod h1:fJ/wl9MOL1NFhM0hxos9BKj/WLKqQ5wZ4e/tm1UObfs=
-github.com/tsvsheet/go-tsvsheet v0.4.1 h1:0BslLyLTpp/a6bvHpjPFeMAHYN24l8Qv20wDFjf55Fw=
-github.com/tsvsheet/go-tsvsheet v0.4.1/go.mod h1:1glSgxBci8GGjM9d6U25FMaaezfuQZJrvcruTdZiQX4=
+github.com/tsvsheet/go-tsvsheet v0.4.3 h1:jkIMH4jX9ba5pGXwmDLc5G8EIuNH3V77X/tJsQMyPOI=
+github.com/tsvsheet/go-tsvsheet v0.4.3/go.mod h1:1glSgxBci8GGjM9d6U25FMaaezfuQZJrvcruTdZiQX4=
 github.com/urfave/cli/v3 v3.10.1 h1:7Kx9H50hrHbRbyxgO1KP6/BcbiGRz0uYh5YyQ30JEEY=
 github.com/urfave/cli/v3 v3.10.1/go.mod h1:ysVLtOEmg2tOy6PknnYVhDoouyC/6N42TMeoMzskhso=
 github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e h1:JVG44RsyaB9T2KIHavMF/ppJZNG9ZpyihvCd0w101no=
