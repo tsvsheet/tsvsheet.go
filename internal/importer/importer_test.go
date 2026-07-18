@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -48,6 +49,23 @@ func TestFetch_HappyPathStripsCharsetParam(t *testing.T) {
 	assert.Equal(t, "42\n", string(res.Body))
 }
 
+func TestFetch_GenericTabularTypesPassThroughNormalized(t *testing.T) {
+	t.Parallel()
+
+	// A standard tabular Content-Type reaches the engine as its normalized base
+	// type — the engine's accept set, not the Fetcher, decides admissibility.
+	for _, ct := range []string{"text/tab-separated-values; charset=utf-8", "text/csv"} {
+		f, srv := tlsFetcher(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", ct)
+			_, _ = w.Write([]byte("42\n"))
+		})
+		res, err := f.Fetch(tsvsheet.ImportURL(srv.URL), cellMedia)
+		require.NoError(t, err)
+		base, _, _ := strings.Cut(ct, ";")
+		assert.Equal(t, tsvsheet.MediaType(base), res.ContentType, ct)
+	}
+}
+
 func TestFetch_SendsAcceptHeader(t *testing.T) {
 	t.Parallel()
 
@@ -60,7 +78,8 @@ func TestFetch_SendsAcceptHeader(t *testing.T) {
 
 	_, err := f.Fetch(tsvsheet.ImportURL(srv.URL), cellMedia)
 	require.NoError(t, err)
-	assert.Equal(t, string(cellMedia), got)
+	// The header negotiates: vendor type preferred, standard tabular admitted.
+	assert.Equal(t, string(cellMedia)+", text/tab-separated-values;q=0.9, text/csv;q=0.8", got)
 }
 
 func TestFetch_SchemeMustBeHTTPS(t *testing.T) {

@@ -129,7 +129,7 @@ func (f Fetcher) request(
 	if !f.hostAllowed(Host(req.URL.Hostname())) {
 		return nil, constants.ErrImportHostDenied
 	}
-	req.Header.Set("Accept", string(accept))
+	req.Header.Set("Accept", accept.Accept())
 	return req, nil
 }
 
