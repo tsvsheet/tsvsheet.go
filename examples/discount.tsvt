@@ -1,4 +1,0 @@
-price	qty	subtotal
-=input(1)	=input(2)	=A2*B2
-discount rate	0.1	=C2*(1-B3)
-=output(C3)		

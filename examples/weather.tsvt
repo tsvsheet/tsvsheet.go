@@ -1,7 +1,0 @@
-Day	High	Low	Range
-Mon	72	55	=B2-C2
-Tue	75	58	=B3-C3
-Wed	68	52	=B4-C4
-Thu	80	61	=B5-C5
-Fri	77	59	=B6-C6
-Peak	=max(B2:B6)	=min(C2:C6)	=B7-C7

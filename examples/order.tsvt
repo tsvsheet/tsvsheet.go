@@ -1,5 +1,0 @@
-Item	Qty	Unit	Line total
-Widgets	3	100	=sheet("discount.tsvt", C2, B2)
-Gadgets	10	50	=sheet("discount.tsvt", C3, B3)
-Gizmos	5	20	=sheet("discount.tsvt", C4, B4)
-Order total			=sum(D2:D4)

@@ -1,7 +1,0 @@
-N	Square	Cube
-1	=A2^2	=A2^3
-2	=A3^2	=A3^3
-3	=A4^2	=A4^3
-4	=A5^2	=A5^3
-5	=A6^2	=A6^3
-Total	=sum(B2:B6)	=sum(C2:C6)
