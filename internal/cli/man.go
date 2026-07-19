@@ -58,9 +58,12 @@ const helpName = "help"
 // .SH sections, one .SS subsection per command, .TP tagged flags, and indented
 // example lines preserved verbatim in .EX/.EE blocks.
 func manPage(root *cli.Command) string {
+	// An .SH starts a paragraph itself, so the description's leading .PP is
+	// redundant (mandoc warns about it) — drop it.
+	description := strings.TrimPrefix(manProse(manText(root.Description)), ".PP\n")
 	return manHeader(root) +
 		manSynopsis(root) +
-		".SH DESCRIPTION\n" + manProse(manText(root.Description)) +
+		".SH DESCRIPTION\n" + description +
 		manFlagsSection("GLOBAL OPTIONS", root.VisibleFlags()) +
 		manCommandsSection(root)
 }
