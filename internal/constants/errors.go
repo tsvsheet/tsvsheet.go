@@ -3,8 +3,8 @@
 // library; these values are this package's own.
 package constants
 
-// Imported bare (the package is named error); this file declares only sentinels
-// and uses no builtin error type, so each declaration reads errs.Const.
+// The library's package is named errs; the explicit alias states that beside
+// the import path (go-error), which does not name it.
 import errs "github.com/gomatic/go-error"
 
 // Keep these constants sorted alphabetically.
@@ -22,6 +22,7 @@ const (
 	ErrImportTooLarge      errs.Const = "import body too large"
 	ErrImportURL           errs.Const = "import url invalid"
 	ErrInvalidName         errs.Const = "invalid name"
+	ErrManPage             errs.Const = "failed to render man page"
 	ErrMissingArgument     errs.Const = "missing required argument"
 	ErrMultiCellExpression errs.Const = "expression must be a single cell: it may not contain tab or newline characters"
 	ErrOpenFile            errs.Const = "failed to open file"

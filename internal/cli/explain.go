@@ -83,8 +83,8 @@ literal), and the resolved value of each cell the formula reads. The cell is
 required and positional; the sheet follows (omitted or "-" reads stdin).
 
 Examples:
-  tsvsheet explain D2 sheet.tsvt
-  tsvsheet explain D2 --json sheet.tsvt`,
+  tsv explain D2 sheet.tsvt
+  tsv explain D2 --json sheet.tsvt`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:        jsonFlag,

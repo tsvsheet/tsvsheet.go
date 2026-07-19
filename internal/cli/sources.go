@@ -41,7 +41,7 @@ func (p sourcePath) open(stdin io.Reader) (io.Reader, closeFunc, error) {
 	}
 	file, err := os.Open(string(p))
 	if err != nil {
-		return nil, nil, constants.ErrOpenFile.With(err, string(p))
+		return nil, nil, constants.ErrOpenFile.With(err)
 	}
 	return file, file.Close, nil
 }

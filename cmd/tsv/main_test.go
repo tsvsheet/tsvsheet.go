@@ -8,14 +8,14 @@ import (
 )
 
 func TestRun_Version(t *testing.T) {
-	assert.Equal(t, 0, run([]string{"tsvsheet", "--version"}))
+	assert.Equal(t, 0, run([]string{"tsv", "--version"}))
 }
 
 func TestMain_InvokesRunAndExits(t *testing.T) {
 	oldArgs, oldExit := os.Args, osExit
 	defer func() { os.Args, osExit = oldArgs, oldExit }()
 
-	os.Args = []string{"tsvsheet", "--version"}
+	os.Args = []string{"tsv", "--version"}
 	code := -1
 	osExit = func(c int) { code = c }
 

@@ -88,10 +88,10 @@ expression is positional; omitted (or empty) reads it from stdin. A leading
 (A2, B3) resolves to #REF! — eval is for self-contained expressions.
 
 Examples:
-  tsvsheet eval '=1+2'          # 3
-  tsvsheet eval 'SUM(1,2,3)'    # 6
-  tsvsheet eval '1/0'           # #DIV/0!
-  echo '=2^10' | tsvsheet eval  # 1024`,
+  tsv eval '=1+2'          # 3
+  tsv eval 'SUM(1,2,3)'    # 6
+  tsv eval '1/0'           # #DIV/0!
+  echo '=2^10' | tsv eval  # 1024`,
 		Action: limitedAction(func(s Streams, args positional, limits tsvsheet.Limits) error {
 			return runEval(s, evalArg(args.text(0)), limits)
 		}),

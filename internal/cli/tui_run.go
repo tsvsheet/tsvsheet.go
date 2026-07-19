@@ -55,7 +55,7 @@ func loadEditable(
 	path := filepath.Clean(string(source))
 	src, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, constants.ErrOpenFile.With(err, path)
+		return nil, nil, constants.ErrOpenFile.With(err)
 	}
 	// Resolve SHEET(...) and "file"! references within the spreadsheet's own
 	// directory (or any path with isUnconfined), with this file as the base;

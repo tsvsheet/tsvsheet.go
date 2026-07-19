@@ -22,7 +22,7 @@ func TestCLI_Completion(t *testing.T) {
 	}
 }
 
-// TestCLI_CompletionUnsupported proves a shell tsvsheet does not emit for — even
+// TestCLI_CompletionUnsupported proves a shell tsv does not emit for — even
 // one urfave/cli itself supports (powershell) — is the specific
 // ErrUnsupportedShell sentinel, not a crash or a raw library error.
 func TestCLI_CompletionUnsupported(t *testing.T) {

@@ -58,7 +58,10 @@ func TestCommand_HasAllCommands(t *testing.T) {
 	}
 	assert.ElementsMatch(
 		t,
-		[]string{cmdRender, cmdParse, cmdFromJSON, cmdCheck, cmdExplain, cmdEval, cmdServe, cmdTUI, cmdComplete},
+		[]string{
+			cmdRender, cmdParse, cmdFromJSON, cmdCheck, cmdExplain,
+			cmdEval, cmdServe, cmdTUI, cmdComplete, cmdMan,
+		},
 		names,
 	)
 }
@@ -111,7 +114,7 @@ func TestCLI_RenderFormatUnknown(t *testing.T) {
 
 func TestCLI_DefaultCommandRenders(t *testing.T) {
 	// No subcommand → the default command renders (so a shebang'd .tsvt run as
-	// `tsvsheet file.tsvt` computes it).
+	// `tsv file.tsvt` computes it).
 	path := writeTemp(t, "s.tsvt", sampleSheet)
 	out, err := runCLI(t, path)
 	require.NoError(t, err)

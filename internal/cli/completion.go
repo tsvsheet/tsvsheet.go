@@ -11,10 +11,10 @@ import (
 )
 
 // shellName is a shell the completion command can emit a script for. It is the
-// positional argument to `tsvsheet completion <shell>`.
+// positional argument to `tsv completion <shell>`.
 type shellName string
 
-// The shells for which tsvsheet emits a completion script, in help/message
+// The shells for which tsv emits a completion script, in help/message
 // order. Each maps to a subcommand of urfave/cli's built-in (renamed) shell
 // completion command, whose per-shell script templates are reused verbatim.
 const (
@@ -78,9 +78,9 @@ to stdout. Source the output to enable completion of tsvsheet's commands and
 flags.
 
 Examples:
-  source <(tsvsheet completion bash)                            # .bashrc
-  source <(tsvsheet completion zsh)                             # .zshrc
-  tsvsheet completion fish > ~/.config/fish/completions/tsvsheet.fish`,
+  source <(tsv completion bash)                            # .bashrc
+  source <(tsv completion zsh)                             # .zshrc
+  tsv completion fish > ~/.config/fish/completions/tsvsheet.fish`,
 		Action: func(ctx context.Context, c *cli.Command) error {
 			return runCompletion(ctx, c.Root(), shellName(c.Args().First()))
 		},

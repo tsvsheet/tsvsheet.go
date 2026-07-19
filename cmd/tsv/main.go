@@ -1,4 +1,4 @@
-// Command tsvsheet computes a .tsvt spreadsheet — a TAB-separated grid of
+// Command tsv computes a .tsvt spreadsheet — a TAB-separated grid of
 // literal and =formula cells — and edits it in the browser or terminal. The
 // command tree lives in internal/cli.
 package main

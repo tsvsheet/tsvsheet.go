@@ -59,8 +59,8 @@ one per line to stderr. Exit status: 0 clean, 1 diagnostics found, 2 syntax
 error.
 
 Examples:
-  tsvsheet check sheet.tsvt
-  cat sheet.tsvt | tsvsheet check`,
+  tsv check sheet.tsvt
+  cat sheet.tsvt | tsv check`,
 		Action: streamAction(func(s Streams, args positional) error {
 			return runCheck(s, args.at(0))
 		}),
