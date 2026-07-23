@@ -37,6 +37,7 @@ type Session struct {
 	limits       tsvsheet.Limits
 	mu           sync.Mutex
 	isDirty      bool
+	tick         int
 }
 
 // New parses spreadsheet source and computes it eagerly, with no sheet loader —
@@ -83,12 +84,20 @@ func withDefaults(limits tsvsheet.Limits) tsvsheet.Limits {
 func (s *Session) recompute() {
 	s.computed = s.sheet.ComputeWith(s.computeOptions())
 	s.diagnostics = tsvsheet.Check(s.sheet)
+	s.tick++ // each pass advances the ordinal read by tick()/frame()
 }
 
 // computeOptions builds the compute options for this session: its loader, base
 // path, and resource limits, with the clock sampled at call time.
 func (s *Session) computeOptions() tsvsheet.ComputeOptions {
-	return tsvsheet.ComputeOptions{At: time.Now(), Loader: s.loader, Base: s.base, Limits: s.limits, Fetcher: s.fetcher}
+	return tsvsheet.ComputeOptions{
+		At:      time.Now(),
+		Loader:  s.loader,
+		Base:    s.base,
+		Limits:  s.limits,
+		Fetcher: s.fetcher,
+		Tick:    tsvsheet.Tick(s.tick),
+	}
 }
 
 // SetCell edits one cell's source text (a literal or a formula) and recomputes.

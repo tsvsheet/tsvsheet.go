@@ -336,3 +336,15 @@ func TestVolatileSchedules(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"5m"}, v.VolatileSchedules())
 }
+
+func TestTickAdvancesEachRecompute(t *testing.T) {
+	t.Parallel()
+
+	// tick() reads the pass ordinal, which advances on every recompute so a
+	// refreshing frontend can drive frame-based animation.
+	s, err := session.New([]byte("=tick()\n"))
+	require.NoError(t, err)
+	assert.Equal(t, "0", s.Snapshot().Computed[0][0])  // first pass
+	assert.Equal(t, "1", s.Recompute().Computed[0][0]) // next pass
+	assert.Equal(t, "2", s.Recompute().Computed[0][0])
+}
