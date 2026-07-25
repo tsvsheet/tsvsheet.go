@@ -147,6 +147,26 @@ func (s *Session) DeleteCol(at tsvsheet.Address) {
 	s.structuralEdit(func(sh tsvsheet.Sheet) tsvsheet.Sheet { return sh.DeleteCol(at) })
 }
 
+// Fill copies the cell at from across the to span with fill semantics: each
+// unpinned reference shifts by the target's offset, `$`-pinned coordinates
+// hold (Sheet.Fill).
+func (s *Session) Fill(from tsvsheet.Address, to tsvsheet.Span) {
+	s.structuralEdit(func(sh tsvsheet.Sheet) tsvsheet.Sheet { return sh.Fill(from, to) })
+}
+
+// DuplicateRow duplicates row at.Row below itself: the duplicate's references
+// rebase one row down and the rest of the grid shifts as InsertRow shifts it.
+func (s *Session) DuplicateRow(at tsvsheet.Address) {
+	s.structuralEdit(func(sh tsvsheet.Sheet) tsvsheet.Sheet { return sh.DuplicateRow(at) })
+}
+
+// DuplicateCol duplicates column at.Col to its right: the duplicate's
+// references rebase one column right and the rest of the grid shifts as
+// InsertCol shifts it.
+func (s *Session) DuplicateCol(at tsvsheet.Address) {
+	s.structuralEdit(func(sh tsvsheet.Sheet) tsvsheet.Sheet { return sh.DuplicateCol(at) })
+}
+
 // Snapshot returns a deep-copied read model safe for the caller to hold and
 // mutate.
 func (s *Session) Snapshot() State {

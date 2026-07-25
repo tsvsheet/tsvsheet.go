@@ -346,6 +346,20 @@
 				>
 					－col
 				</button>
+				<button
+					type="button"
+					data-op="duplicate-row"
+					title="Duplicate the selected row below itself (references rebase)"
+				>
+					⧉row
+				</button>
+				<button
+					type="button"
+					data-op="duplicate-col"
+					title="Duplicate the selected column to its right (references rebase)"
+				>
+					⧉col
+				</button>
 			</span>
 			<button id="save" type="button">Save</button>
 		</header>
@@ -572,6 +586,12 @@
 						e.preventDefault();
 						const td = tdAt(sel.row, sel.col);
 						if (td) editInCell(td, sel.row, sel.col);
+					} else if ((e.ctrlKey || e.metaKey) && e.key === "d") {
+						e.preventDefault(); // fill from the cell above (Excel Ctrl+D)
+						structure("fill-down");
+					} else if ((e.ctrlKey || e.metaKey) && e.key === "r") {
+						e.preventDefault(); // fill from the cell to the left (Excel Ctrl+R)
+						structure("fill-right");
 					}
 				});
 
@@ -663,7 +683,9 @@
 					);
 				}
 
-				// structure applies a row/column insert or delete relative to the selection.
+				// structure applies a structural edit relative to the selection: a
+				// row/column insert, delete, or duplicate, or a fill from the
+				// neighboring cell (fill-down/fill-right).
 				async function structure(op) {
 					try {
 						render(

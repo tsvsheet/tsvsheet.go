@@ -67,7 +67,7 @@ func (m Model) tick() tea.Cmd {
 
 // helpNav and helpEdit are the mode hints.
 const (
-	helpNav  = "arrows/hjkl move · enter edit · ctrl+s save · R refresh imports · q quit"
+	helpNav  = "arrows/hjkl move · enter edit · ctrl+d/ctrl+r fill · D/C duplicate row/col · ctrl+s save · R refresh imports · q quit"
 	helpEdit = "type a value or =formula · enter commit · esc cancel"
 )
 
@@ -139,6 +139,14 @@ func (m Model) command(key string) (Model, tea.Cmd) {
 		return m, nil
 	case "ctrl+s":
 		return m.doSave(), nil
+	case "ctrl+d":
+		return m.fillFrom(m.row-1, m.col), nil
+	case "ctrl+r":
+		return m.fillFrom(m.row, m.col-1), nil
+	case "D":
+		return m.duplicate(m.session.DuplicateRow, "Row duplicated."), nil
+	case "C":
+		return m.duplicate(m.session.DuplicateCol, "Column duplicated."), nil
 	case "R":
 		return m.refreshImports(), nil
 	case "q", "ctrl+c", keyEsc:
@@ -180,6 +188,28 @@ func (m Model) commit() Model {
 		return m
 	}
 	return m.refreshedNav()
+}
+
+// fillFrom copies the neighboring cell at (row, col) into the selection with
+// fill semantics — ctrl+d fills from above, ctrl+r from the left, Excel's
+// single-cell Ctrl+D/Ctrl+R. A selection with no such neighbor (top row, first
+// column) is a no-op, as in Excel.
+func (m Model) fillFrom(row, col int) Model {
+	if row < 0 || col < 0 {
+		return m
+	}
+	at := tsvsheet.Address{Row: m.row, Col: m.col}
+	m.session.Fill(tsvsheet.Address{Row: row, Col: col}, tsvsheet.Span{From: at, To: at})
+	m.state, m.status, m.isConfirmingQuit = m.session.Snapshot(), "Filled.", false
+	return m
+}
+
+// duplicate applies a session row/column duplication at the selection and
+// reports it.
+func (m Model) duplicate(op func(tsvsheet.Address), status string) Model {
+	op(tsvsheet.Address{Row: m.row, Col: m.col})
+	m.state, m.status, m.isConfirmingQuit = m.session.Snapshot(), status, false
+	return m
 }
 
 // refreshImports drops any cached content-typed imports and recomputes, so the

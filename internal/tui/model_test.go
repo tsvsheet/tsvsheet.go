@@ -85,6 +85,10 @@ func keyMsg(key string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyCtrlS}
 	case "ctrl+c":
 		return tea.KeyMsg{Type: tea.KeyCtrlC}
+	case "ctrl+d":
+		return tea.KeyMsg{Type: tea.KeyCtrlD}
+	case "ctrl+r":
+		return tea.KeyMsg{Type: tea.KeyCtrlR}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
 	}
@@ -454,3 +458,54 @@ var ansiSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 // stripANSI removes ANSI escape sequences for assertion.
 func stripANSI(s string) string { return ansiSGR.ReplaceAllString(s, "") }
+
+func TestFillKeys(t *testing.T) {
+	t.Parallel()
+
+	// ctrl+d on D2 fills from D1 (=B1+C1 → =B2 + C2, overwriting in place);
+	// ctrl+r on B1's right neighbor fills the literal from the left.
+	m := newModel(t, nil)
+	m = press(t, m, "down")
+	for range 3 {
+		m = press(t, m, "right") // to D2
+	}
+	m = press(t, m, "ctrl+d")
+	assert.Equal(t, "=B2 + C2", m.state.Source[1][3])
+	assert.Equal(t, "Filled.", m.status)
+
+	m2 := newModel(t, nil)
+	m2 = press(t, m2, "right") // to B1
+	m2 = press(t, m2, "ctrl+r")
+	assert.Equal(t, "name", m2.state.Source[0][1])
+}
+
+func TestFillKeys_NoNeighborIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	// The top row has nothing above and the first column nothing to the left.
+	m := newModel(t, nil)
+	m = press(t, m, "ctrl+d")
+	m = press(t, m, "ctrl+r")
+	assert.Equal(t, "name", m.state.Source[0][0])
+	assert.False(t, m.state.IsDirty)
+}
+
+func TestDuplicateKeys(t *testing.T) {
+	t.Parallel()
+
+	// D duplicates the selected row below itself; C the selected column to its
+	// right — both rebasing the duplicate's references.
+	m := newModel(t, nil)
+	m = press(t, m, "down")
+	m = press(t, m, "D")
+	assert.Len(t, m.state.Source, 3)
+	assert.Equal(t, "=B3 + C3", m.state.Source[2][3])
+	assert.Equal(t, "Row duplicated.", m.status)
+
+	m2 := newModel(t, nil)
+	m2 = press(t, m2, "right")
+	m2 = press(t, m2, "C")
+	assert.Len(t, m2.state.Source[0], 5)
+	assert.Equal(t, "2", m2.state.Source[0][2])
+	assert.Equal(t, "Column duplicated.", m2.status)
+}

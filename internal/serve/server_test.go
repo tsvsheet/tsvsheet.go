@@ -187,6 +187,8 @@ func TestStructure_AllOps(t *testing.T) {
 		{"delete-row", 2, 4},
 		{"insert-col", 3, 5},
 		{"delete-col", 3, 3},
+		{"duplicate-row", 4, 4},
+		{"duplicate-col", 3, 5},
 	}
 	for _, tc := range cases {
 		t.Run(tc.op, func(t *testing.T) {
@@ -365,4 +367,40 @@ func TestUI_ServesHTML(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "<!doctype html>")
 	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+}
+
+func TestStructure_FillOps(t *testing.T) {
+	t.Parallel()
+
+	// fill-down copies the cell above the selection into it, rebased —
+	// Excel's single-cell Ctrl+D; fill-right the cell to its left.
+	srv, _ := testServer(t)
+	rec := do(t, srv, http.MethodPost, "/api/structure", `{"op":"fill-down","row":2,"col":3}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var state session.State
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &state))
+	assert.Equal(t, "=B3 + C3", state.Source[2][3])
+
+	rec = do(t, srv, http.MethodPost, "/api/structure", `{"op":"fill-right","row":0,"col":1}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &state))
+	assert.Equal(t, state.Source[0][0], state.Source[0][1]) // header copied left→right
+}
+
+func TestStructure_FillWithoutNeighborIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	// The top row has no cell above, the first column none to the left: both
+	// fills are quiet no-ops, as in Excel.
+	srv, _ := testServer(t)
+	for _, body := range []string{
+		`{"op":"fill-down","row":0,"col":1}`,
+		`{"op":"fill-right","row":1,"col":0}`,
+	} {
+		rec := do(t, srv, http.MethodPost, "/api/structure", body)
+		require.Equal(t, http.StatusOK, rec.Code)
+		var state session.State
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &state))
+		assert.False(t, state.IsDirty) // the session was never touched
+	}
 }

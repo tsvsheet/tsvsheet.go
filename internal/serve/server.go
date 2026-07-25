@@ -180,10 +180,14 @@ func (srv Server) handleExplain(w http.ResponseWriter, r *http.Request) {
 type structureOp string
 
 const (
-	opInsertRow structureOp = "insert-row"
-	opDeleteRow structureOp = "delete-row"
-	opInsertCol structureOp = "insert-col"
-	opDeleteCol structureOp = "delete-col"
+	opInsertRow    structureOp = "insert-row"
+	opDeleteRow    structureOp = "delete-row"
+	opInsertCol    structureOp = "insert-col"
+	opDeleteCol    structureOp = "delete-col"
+	opDuplicateRow structureOp = "duplicate-row"
+	opDuplicateCol structureOp = "duplicate-col"
+	opFillDown     structureOp = "fill-down"
+	opFillRight    structureOp = "fill-right"
 )
 
 // structureRequest is the POST /api/structure body: the op and the 0-based cell
@@ -231,10 +235,31 @@ func (srv Server) applyStructure(op structureOp, at tsvsheet.Address) bool {
 		srv.session.InsertCol(at)
 	case opDeleteCol:
 		srv.session.DeleteCol(at)
+	case opDuplicateRow:
+		srv.session.DuplicateRow(at)
+	case opDuplicateCol:
+		srv.session.DuplicateCol(at)
+	case opFillDown, opFillRight:
+		srv.fillFromNeighbor(op, at)
 	default:
 		return false
 	}
 	return true
+}
+
+// fillFromNeighbor applies the single-cell fill ops: fill-down copies the cell
+// above the selection into it, fill-right the cell to its left — Excel's
+// Ctrl+D/Ctrl+R on a single cell. A selection on the top row (or leftmost
+// column) has no source neighbor and is a no-op, as in Excel.
+func (srv Server) fillFromNeighbor(op structureOp, at tsvsheet.Address) {
+	from := tsvsheet.Address{Row: at.Row - 1, Col: at.Col}
+	if op == opFillRight {
+		from = tsvsheet.Address{Row: at.Row, Col: at.Col - 1}
+	}
+	if from.Row < 0 || from.Col < 0 {
+		return
+	}
+	srv.session.Fill(from, tsvsheet.Span{From: at, To: at})
 }
 
 // referencesResponse is the GET /api/references body: the selected cell's
