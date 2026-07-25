@@ -1,6 +1,6 @@
 # tsvsheet.go
 
-> **A spreadsheet for plain text.** The Go implementation of [tsvsheet](https://github.com/tsvsheet/tsvsheet): a `.tsvt` **is** the spreadsheet — a single TAB-separated grid whose cells are literal values or `=formulas` that address other cells in A1 notation (`B2`, `D2:D5`), computed in place — editable from the CLI, the browser, or the terminal, all through one engine.
+> **A spreadsheet in plain text.** The Go implementation of [tsvsheet](https://github.com/tsvsheet/tsvsheet): a `.tsvt` **is** the spreadsheet — a single TAB-separated grid whose cells are literal values or `=formulas` that address other cells in A1 notation (`B2`, `D2:D5`), computed in place — editable from the CLI, the browser, or the terminal, all through one engine.
 
 This is the CLI/library implementation repo (module `github.com/tsvsheet/tsvsheet.go`, binary `cmd/tsv/`). It lifts the grammar repo's ANTLR-generated Go parser and reuses only its **expression sublanguage** (via `tsvt.ParseFormula`) to compile each cell's formula; the surrounding **A1 single-file spreadsheet model is layered here**.
 

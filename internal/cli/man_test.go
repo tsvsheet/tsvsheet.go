@@ -18,7 +18,7 @@ func TestCLI_Man(t *testing.T) {
 	out, err := runCLI(t, cmdMan)
 	require.NoError(t, err)
 	assert.Contains(t, out, `.TH TSV 1 "" "tsv`)
-	assert.Contains(t, out, ".SH NAME\ntsv \\- A spreadsheet for plain text")
+	assert.Contains(t, out, ".SH NAME\ntsv \\- A spreadsheet in plain text")
 	assert.Contains(t, out, ".SH SYNOPSIS")
 	assert.Contains(t, out, ".SH DESCRIPTION")
 	assert.Contains(t, out, ".SH GLOBAL OPTIONS")

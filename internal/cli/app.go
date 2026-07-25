@@ -11,7 +11,7 @@ import (
 
 const (
 	name        = "tsv"
-	usage       = "A spreadsheet for plain text: a .tsvt grid of values and =formulas."
+	usage       = "A spreadsheet in plain text: a .tsvt grid of values and =formulas."
 	description = `tsv computes a .tsvt spreadsheet — a TAB-separated grid whose cells are
 literal values or =formulas that address other cells in A1 notation (B2,
 D2:D4) — and emits the computed grid, kept diffable as text.

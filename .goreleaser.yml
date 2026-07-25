@@ -71,7 +71,7 @@ nfpms:
     vendor: tsvsheet
     homepage: https://tsvsheet.com
     maintainer: tsvsheet <noreply@tsvsheet.com>
-    description: A spreadsheet for plain text — compute .tsvt grids of values and =formulas.
+    description: A spreadsheet in plain text — compute .tsvt grids of values and =formulas.
     license: MIT
     formats:
       - deb
