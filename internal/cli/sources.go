@@ -58,6 +58,17 @@ func readAll(r io.Reader) ([]byte, error) {
 	return data, nil
 }
 
+// parseDocument reads a spreadsheet source fully and parses it with its
+// physical line layout, so the `#.` view directives survive — a plain sheet
+// drops the lines they live on.
+func parseDocument(r io.Reader) (tsvsheet.Document, error) {
+	src, err := readAll(r)
+	if err != nil {
+		return tsvsheet.Document{}, err
+	}
+	return tsvsheet.ParseDocument(src)
+}
+
 // parseSheet reads a spreadsheet source fully and parses it.
 func parseSheet(r io.Reader) (tsvsheet.Sheet, error) {
 	src, err := readAll(r)

@@ -93,7 +93,7 @@ func TestFormat_Serializations(t *testing.T) {
 			t.Parallel()
 
 			var out bytes.Buffer
-			require.NoError(t, format(&out, tc.grid, tc.f))
+			require.NoError(t, format(&out, projection{grid: tc.grid}, tc.f))
 			assert.Equal(t, tc.want, out.String())
 		})
 	}
@@ -103,7 +103,7 @@ func TestFormat_Unknown(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	err := format(&out, computedGrid, "xml")
+	err := format(&out, projection{grid: computedGrid}, "xml")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrUnknownFormat)
 	assert.Contains(t, err.Error(), "xml") // the offending value is named
@@ -118,7 +118,7 @@ func TestFormat_WriteErrors(t *testing.T) {
 		t.Run(string(f), func(t *testing.T) {
 			t.Parallel()
 
-			err := format(failWriter{}, computedGrid, f)
+			err := format(failWriter{}, projection{grid: computedGrid}, f)
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tsvsheet.ErrWriteFile)
 		})

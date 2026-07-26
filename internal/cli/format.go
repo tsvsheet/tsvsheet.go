@@ -31,6 +31,8 @@ const (
 const (
 	flagFormat  = "format"
 	usageFormat = "Output format for the computed grid: tsv (default), csv, html, or markdown (md)"
+	flagHidden  = "hidden"
+	usageHidden = "What to do with rows and columns the sheet hides: keep (default) or drop"
 )
 
 // rendering is a fully serialized grid, ready to write to an output stream.
@@ -48,16 +50,16 @@ func (r rendering) write(w io.Writer) error {
 // format writes the computed grid to w in the requested format. An unrecognized
 // format is ErrUnknownFormat naming the offending value (matchable with
 // errors.Is); the tsv path is byte-identical to tsvsheet.WriteTSV.
-func format(w io.Writer, grid tsvsheet.Grid, f Format) error {
+func format(w io.Writer, seen projection, f Format) error {
 	switch f {
 	case formatTSV:
-		return tsvsheet.WriteTSV(w, grid)
+		return tsvsheet.WriteTSV(w, seen.grid)
 	case formatCSV:
-		return writeCSV(w, grid)
+		return writeCSV(w, seen.grid)
 	case formatHTML:
-		return writeHTML(w, grid)
+		return writeHTML(w, seen)
 	case formatMarkdown, formatMD:
-		return writeMarkdown(w, grid)
+		return writeMarkdown(w, seen.grid)
 	default:
 		return constants.ErrUnknownFormat.With(nil, "format", string(f))
 	}
@@ -74,22 +76,43 @@ func writeCSV(w io.Writer, grid tsvsheet.Grid) error {
 }
 
 // writeHTML writes the grid as a plain, class-tagged HTML <table> — one <tr> per
-// row, one <td> per cell, every cell HTML-escaped, no inline styles — so it
-// composes with any stylesheet (matching the goldmark extension's output).
-func writeHTML(w io.Writer, grid tsvsheet.Grid) error {
-	rows := make([]string, len(grid))
-	for i, row := range grid {
-		rows[i] = htmlRow(row)
+// row, one cell element per cell, every cell HTML-escaped, no inline styles — so
+// it composes with any stylesheet (matching the goldmark extension's output).
+// The rows a sheet declares with `#.header` are written as <th>, and the block
+// of them at the top becomes a <thead>, which is the structure the declaration
+// exists to express.
+func writeHTML(w io.Writer, seen projection) error {
+	rows := make([]string, len(seen.grid))
+	for i, row := range seen.grid {
+		rows[i] = htmlRow(row, isHeaderRow(seen.headerRows[i+1]))
 	}
-	body := `<table class="tsvsheet">` + "\n" + strings.Join(rows, "") + "</table>\n"
+	body := `<table class="tsvsheet">` + "\n" + htmlSections(rows, seen.leadingHeaderRows()) + "</table>\n"
 	return rendering(body).write(w)
 }
 
-// htmlRow renders one grid row as a <tr> of HTML-escaped <td> cells.
-func htmlRow(row []string) string {
+// htmlSections wraps a leading header block in <thead> and the rest in <tbody>,
+// leaving an undeclared table as the bare rows it has always been.
+func htmlSections(rows []string, leading headerBlock) string {
+	if leading == 0 {
+		return strings.Join(rows, "")
+	}
+	head := "<thead>\n" + strings.Join(rows[:leading], "") + "</thead>\n"
+	if int(leading) == len(rows) {
+		return head
+	}
+	return head + "<tbody>\n" + strings.Join(rows[leading:], "") + "</tbody>\n"
+}
+
+// htmlRow renders one grid row as a <tr>, using <th> for a declared header row
+// and <td> otherwise.
+func htmlRow(row []string, isHeader isHeaderRow) string {
+	tag := "td"
+	if isHeader {
+		tag = "th"
+	}
 	cells := make([]string, len(row))
 	for i, cell := range row {
-		cells[i] = "<td>" + html.EscapeString(cell) + "</td>"
+		cells[i] = "<" + tag + ">" + html.EscapeString(cell) + "</" + tag + ">"
 	}
 	return "<tr>" + strings.Join(cells, "") + "</tr>\n"
 }

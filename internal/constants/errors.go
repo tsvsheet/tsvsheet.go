@@ -26,6 +26,7 @@ const (
 	ErrMissingArgument     errs.Const = "missing required argument"
 	ErrMultiCellExpression errs.Const = "expression must be a single cell: it may not contain tab or newline characters"
 	ErrOpenFile            errs.Const = "failed to open file"
+	ErrUnknownHiddenPolicy errs.Const = "unknown hidden policy"
 	ErrUnknownFormat       errs.Const = "unknown render format"
 	ErrUnsupported         errs.Const = "unsupported construct"
 	ErrUnsupportedShell    errs.Const = "unsupported shell"

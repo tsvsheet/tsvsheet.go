@@ -247,7 +247,7 @@ func TestRunRender_ReadError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runRender(streams, "-", formatTSV, false, tsvsheet.DefaultLimits(), nil)
+	err := runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
 }

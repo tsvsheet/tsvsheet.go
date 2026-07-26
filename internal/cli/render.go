@@ -18,6 +18,7 @@ func runRender(
 	streams Streams,
 	source sourcePath,
 	outputFormat Format,
+	hidden hiddenPolicy,
 	isUnconfined pathAccess,
 	limits tsvsheet.Limits,
 	fetcher tsvsheet.Fetcher,
@@ -28,12 +29,17 @@ func runRender(
 	}
 	defer func() { _ = release() }()
 
-	parsed, err := parseSheet(reader)
+	doc, err := parseDocument(reader)
 	if err != nil {
 		return err
 	}
-	grid := parsed.ComputeWith(computeOptions(source, isUnconfined, limits, fetcher))
-	return format(streams.Out, grid, outputFormat)
+	grid := doc.Sheet().ComputeWith(computeOptions(source, isUnconfined, limits, fetcher))
+	view, _ := doc.View()
+	seen, err := project(grid, view, hidden)
+	if err != nil {
+		return err
+	}
+	return format(streams.Out, seen, outputFormat)
 }
 
 // computeOptions builds the compute options for a source: a filesystem sheet
@@ -63,6 +69,7 @@ func computeOptions(
 func renderCommand() *cli.Command {
 	isUnconfined := false
 	outputFormat := string(formatTSV)
+	hidden := string(hiddenKeep)
 	return &cli.Command{
 		Name:      cmdRender,
 		Usage:     "Compute a spreadsheet and write the values (TSV, CSV, HTML, or Markdown).",
@@ -71,6 +78,11 @@ func renderCommand() *cli.Command {
 write the computed value grid to stdout. The sheet is positional; omitted or
 "-" reads stdin. --format selects the serialization: tsv (the default), csv,
 html (a <table>), or markdown (a pipe table; md is an alias).
+
+A sheet's own hide directives are advisory to a viewport, not to a pipeline,
+so hidden rows and columns are written out like any other data.
+--hidden=drop asks for the projected artifact instead, with them removed.
+Declared header rows are marked up where a format can carry them (HTML thead).
 
 Examples:
   tsv render sheet.tsvt
@@ -85,11 +97,20 @@ Examples:
 				Usage:       usageFormat,
 				Destination: &outputFormat,
 			},
+			&cli.StringFlag{
+				Name:        flagHidden,
+				Value:       string(hiddenKeep),
+				Usage:       usageHidden,
+				Destination: &hidden,
+			},
 			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
 		}, importFlags()...),
 		Action: importedAction(
 			func(s Streams, args positional, limits tsvsheet.Limits, fetcher tsvsheet.Fetcher) error {
-				return runRender(s, args.at(0), Format(outputFormat), pathAccess(isUnconfined), limits, fetcher)
+				return runRender(
+					s, args.at(0), Format(outputFormat), hiddenPolicy(hidden),
+					pathAccess(isUnconfined), limits, fetcher,
+				)
 			},
 		),
 	}

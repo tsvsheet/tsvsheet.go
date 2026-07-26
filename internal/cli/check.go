@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/tsvsheet/go-tsvsheet"
 	"github.com/urfave/cli/v3"
@@ -22,23 +23,35 @@ func runCheck(streams Streams, source sourcePath) error {
 	}
 	defer func() { _ = release() }()
 
-	parsed, err := parseSheet(reader)
+	doc, err := parseDocument(reader)
 	if err != nil {
 		return err
 	}
-	return reportDiagnostics(streams.Err, tsvsheet.Check(parsed))
+	_, viewDiags := doc.View()
+	return reportDiagnostics(streams.Err, append(viewDiags, tsvsheet.Check(doc.Sheet())...))
 }
 
 // reportDiagnostics writes each diagnostic to w and returns ErrDiagnostics when
-// any are present.
+// any are present. A finding about a cell is addressed by its cell; a finding
+// about a view directive by its line, since a directive occupies a physical
+// line and no grid row.
 func reportDiagnostics(w io.Writer, diags []tsvsheet.Diagnostic) error {
 	for _, d := range diags {
-		_, _ = fmt.Fprintf(w, "%s: %s\n", d.Cell, d.Message)
+		_, _ = fmt.Fprintf(w, "%s: %s\n", locationOf(d), d.Message)
 	}
 	if len(diags) > 0 {
 		return constants.ErrDiagnostics.With(nil, "count", len(diags))
 	}
 	return nil
+}
+
+// locationOf names where a diagnostic was found: a cell address, or a line for
+// the directive findings that have no cell.
+func locationOf(d tsvsheet.Diagnostic) string {
+	if d.Cell != "" {
+		return d.Cell
+	}
+	return "line " + strconv.Itoa(d.Line)
 }
 
 // isSyntaxError reports whether err is a formula syntax error (exit-code 2).
