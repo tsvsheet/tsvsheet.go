@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/gomatic/go-error v0.3.4
 	github.com/gomatic/go-httpserver v0.2.0
-	github.com/gomatic/go-log v0.2.0
+	github.com/gomatic/go-log v0.3.9
 	github.com/stretchr/testify v1.11.1
 	github.com/tsvsheet/go-isnow v0.1.0
 	github.com/tsvsheet/go-tsvsheet v0.13.0

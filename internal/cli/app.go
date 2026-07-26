@@ -132,14 +132,14 @@ func loggerFlags() []cli.Flag {
 			Sources:     cli.EnvVars("TSV_LOG_LEVEL"),
 			Value:       "info",
 			Usage:       "Logging level (debug, info, warn, error)",
-			Destination: (*string)(&loggerConfig.LogLevel),
+			Destination: (*string)(&loggerConfig.Level),
 		},
 		&cli.StringFlag{
 			Name:        "log-format",
 			Sources:     cli.EnvVars("TSV_LOG_FORMAT"),
 			Value:       "text",
 			Usage:       "Log output format (text, json)",
-			Destination: (*string)(&loggerConfig.LogFormat),
+			Destination: (*string)(&loggerConfig.Format),
 		},
 	}
 }
