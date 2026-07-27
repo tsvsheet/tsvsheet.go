@@ -361,6 +361,14 @@
 					⧉col
 				</button>
 			</span>
+			<button
+				id="reveal"
+				type="button"
+				hidden
+				title="Show the rows and columns this sheet hides — a view of the file, never an edit to it"
+			>
+				Show hidden
+			</button>
 			<button id="save" type="button">Save</button>
 		</header>
 		<div class="formula-bar">
@@ -386,6 +394,7 @@
 					diagnostics: document.getElementById("diagnostics"),
 					state: document.getElementById("state"),
 					save: document.getElementById("save"),
+					reveal: document.getElementById("reveal"),
 					reflegend: document.getElementById("reflegend"),
 					embedpanel: document.getElementById("embedpanel"),
 				};
@@ -436,17 +445,61 @@
 					els.state.classList.toggle("dirty", state.dirty);
 				}
 
+				// The view a sheet declares for itself (its `#.` directives). The
+				// engine has already resolved every count(…) and from-the-end offset
+				// against the sheet's extent, so these are plain 1-based positions.
+				// Hiding never renumbers — row 7 stays row 7 while 3-6 are hidden —
+				// so the gutter marks the skip instead of closing it up. Revealing is
+				// session state and never writes to the file.
+				let revealing = false;
+
 				function renderGrid(state, w) {
+					const view = viewOf(state);
 					const table = document.createElement("table");
 					const head = document.createElement("thead");
 					const hr = document.createElement("tr");
 					hr.append(th(""));
-					for (let c = 0; c < w; c++) hr.append(th(colLabel(c)));
+					for (let c = 0; c < w; c++)
+						if (!view.hiddenCols.has(c + 1)) hr.append(th(colLabel(c)));
 					head.append(hr);
 					table.append(head);
-					for (let r = 0; r < state.computed.length; r++)
-						table.append(bodyRow(state, r, w));
+					let skipped = false;
+					for (let r = 0; r < state.computed.length; r++) {
+						if (view.hiddenRows.has(r + 1)) {
+							skipped = true;
+							continue;
+						}
+						table.append(bodyRow(state, r, w, view, skipped));
+						skipped = false;
+					}
 					els.grid.replaceChildren(table);
+					els.reveal.hidden = !hidesAnything(state);
+					els.reveal.textContent = revealing ? "Hide hidden" : "Show hidden";
+				}
+
+				// viewOf indexes the declared view for lookup, honouring the reveal
+				// toggle: revealing shows the hidden parts, marked rather than
+				// unhidden — the directive still stands.
+				function viewOf(state) {
+					const v = state.view || {};
+					const set = (o) => new Set(o ? Object.keys(o).map(Number) : []);
+					return {
+						hiddenRows: revealing ? new Set() : set(v.hidden_rows),
+						hiddenCols: revealing ? new Set() : set(v.hidden_cols),
+						markedRows: set(v.hidden_rows),
+						markedCols: set(v.hidden_cols),
+						headerRows: set(v.header_rows),
+						frozenRows: set(v.freeze_rows),
+						frozenCols: set(v.freeze_cols),
+					};
+				}
+
+				function hidesAnything(state) {
+					const v = state.view || {};
+					return (
+						Object.keys(v.hidden_rows || {}).length > 0 ||
+						Object.keys(v.hidden_cols || {}).length > 0
+					);
 				}
 
 				// refreshValues patches cell values in place after a recompute.
@@ -478,18 +531,25 @@
 					return el;
 				}
 
-				function bodyRow(state, r, w) {
+				function bodyRow(state, r, w, view, afterSkip) {
 					const tr = document.createElement("tr");
+					if (view.headerRows.has(r + 1)) tr.classList.add("headerrow");
+					if (view.frozenRows.has(r + 1)) tr.classList.add("frozen");
+					if (view.markedRows.has(r + 1)) tr.classList.add("revealed");
+					if (afterSkip) tr.classList.add("aftergap");
 					const num = document.createElement("td");
 					num.className = "rownum";
 					num.textContent = r + 1;
 					tr.append(num);
-					for (let c = 0; c < w; c++) tr.append(cell(state, r, c));
+					for (let c = 0; c < w; c++)
+						if (!view.hiddenCols.has(c + 1)) tr.append(cell(state, r, c, view));
 					return tr;
 				}
 
-				function cell(state, r, c) {
+				function cell(state, r, c, view) {
 					const td = document.createElement("td");
+					if (view && view.markedCols.has(c + 1)) td.classList.add("revealed");
+					if (view && view.frozenCols.has(c + 1)) td.classList.add("frozen");
 					const value = at(state.computed, r, c);
 					const src = at(state.source, r, c);
 					td.textContent = value;
@@ -706,6 +766,11 @@
 					.forEach((btn) =>
 						btn.addEventListener("click", () => structure(btn.dataset.op)),
 					);
+
+				els.reveal.addEventListener("click", () => {
+					revealing = !revealing;
+					renderGrid(sheet, width(sheet));
+				});
 
 				els.save.addEventListener("click", async () => {
 					try {

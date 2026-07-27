@@ -60,6 +60,8 @@ github.com/tsvsheet/go-tsvsheet v0.20.0 h1:cEmUrIHIReElr1OJM5GxBhDbbcvPNrCK9Wuhy
 github.com/tsvsheet/go-tsvsheet v0.20.0/go.mod h1:qJY/pFtY24apdl5fjrkgkqtLbMcQe+2ZuhhrDhlflik=
 github.com/tsvsheet/go-tsvsheet v0.20.1 h1:7knVzmyfPg3n9jej14ps++RnNCGN+YaRQyr2IFPO5RE=
 github.com/tsvsheet/go-tsvsheet v0.20.1/go.mod h1:qJY/pFtY24apdl5fjrkgkqtLbMcQe+2ZuhhrDhlflik=
+github.com/tsvsheet/go-tsvsheet v0.21.1 h1:ICwRXAJFd7DSHXxl6jYErzXqcIvctEmgxGBUsAKIIYE=
+github.com/tsvsheet/go-tsvsheet v0.21.1/go.mod h1:qJY/pFtY24apdl5fjrkgkqtLbMcQe+2ZuhhrDhlflik=
 github.com/urfave/cli/v3 v3.10.1 h1:7Kx9H50hrHbRbyxgO1KP6/BcbiGRz0uYh5YyQ30JEEY=
 github.com/urfave/cli/v3 v3.10.1/go.mod h1:ysVLtOEmg2tOy6PknnYVhDoouyC/6N42TMeoMzskhso=
 github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e h1:JVG44RsyaB9T2KIHavMF/ppJZNG9ZpyihvCd0w101no=
