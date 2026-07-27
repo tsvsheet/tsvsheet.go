@@ -39,6 +39,7 @@ type Model struct {
 	viewHeight       int // terminal height in rows (0 until the first resize)
 	top              int // index of the first grid row shown (vertical scroll)
 	mode             mode
+	isRevealing      isRevealing
 	isConfirmingQuit bool
 	isQuitting       bool
 }
@@ -147,6 +148,8 @@ func (m Model) command(key string) (Model, tea.Cmd) {
 		return m.duplicate(m.session.DuplicateRow, "Row duplicated."), nil
 	case "C":
 		return m.duplicate(m.session.DuplicateCol, "Column duplicated."), nil
+	case "v":
+		return m.toggleReveal(), nil
 	case "R":
 		return m.refreshImports(), nil
 	case "q", "ctrl+c", keyEsc:
@@ -210,6 +213,29 @@ func (m Model) duplicate(op func(tsvsheet.Address), status string) Model {
 	op(tsvsheet.Address{Row: m.row, Col: m.col})
 	m.state, m.status, m.isConfirmingQuit = m.session.Snapshot(), status, false
 	return m
+}
+
+// toggleReveal shows or re-hides what the sheet's `#.hide` directives declare.
+// Bound to v in navigation mode. It is session state and never an edit: the
+// file is untouched, so the sheet still carries the view its author declared,
+// and the cursor is pulled back onto a row that is actually rendered.
+func (m Model) toggleReveal() Model {
+	if !m.declaresHidden() {
+		m.status = "This sheet hides nothing."
+		return m
+	}
+	m.isRevealing = !m.isRevealing
+	m.row, m.col = m.onVisibleRow(m.row), m.onVisibleCol(m.col)
+	m.status = revealStatus(m.isRevealing)
+	return m
+}
+
+// revealStatus names the state the toggle just moved to.
+func revealStatus(isOn isRevealing) string {
+	if isOn {
+		return "Showing hidden rows and columns."
+	}
+	return "Hidden rows and columns are hidden again."
 }
 
 // refreshImports drops any cached content-typed imports and recomputes, so the

@@ -28,6 +28,9 @@ var (
 	formulaStyle  = lipgloss.NewStyle().Align(lipgloss.Right).Width(cellWidth).Foreground(lipgloss.Color("179"))
 	errStyle      = lipgloss.NewStyle().Align(lipgloss.Right).Width(cellWidth).Foreground(lipgloss.Color("203"))
 	cursorStyle   = lipgloss.NewStyle().Align(lipgloss.Right).Width(cellWidth).Reverse(true)
+	headerRowSty  = lipgloss.NewStyle().Align(lipgloss.Right).Width(cellWidth).Bold(true)
+	frozenSty     = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Align(lipgloss.Center).Width(cellWidth)
+	hiddenSty     = lipgloss.NewStyle().Align(lipgloss.Right).Width(cellWidth).Faint(true)
 	statusStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginTop(1)
 	dirtyStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("179"))
 	formulaBarSty = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
@@ -66,30 +69,50 @@ func (m Model) formulaBar() string {
 // numbers, and the cursor highlight, scrolled vertically to keep the cursor on
 // screen.
 func (m Model) grid() string {
-	rows := []string{m.headerRow()}
+	rows := []string{m.columnHeadings()}
 	top, end := m.visibleBounds()
 	for r := top; r < end; r++ {
+		if m.hiddenRow(r) {
+			continue
+		}
 		rows = append(rows, m.gridRow(r))
 	}
 	return strings.Join(rows, "\n")
 }
 
-// headerRow renders the column-letter header.
-func (m Model) headerRow() string {
-	cells := []string{headStyle.Render("")}
-	for c := 0; c < m.width(); c++ {
+// columnHeadings renders the column-letter row, skipping hidden columns while
+// keeping every other column's own letter — hiding column C leaves B beside D,
+// because they are still B and D to every formula in the sheet.
+func (m Model) columnHeadings() string {
+	visible := m.visibleCols()
+	cells := make([]string, 0, len(visible)+1)
+	cells = append(cells, headStyle.Render(""))
+	for _, c := range visible {
 		cells = append(cells, headStyle.Render(columnLabel(cursorPos(c))))
 	}
 	return strings.Join(cells, " ")
 }
 
-// gridRow renders one data row with its row number.
+// gridRow renders one data row with its row number, which never renumbers: the
+// gutter marks a skip rather than closing it up.
 func (m Model) gridRow(row int) string {
-	cells := []string{headStyle.Render(itoa(displayInt(row + 1)))}
-	for c := 0; c < m.width(); c++ {
+	visible := m.visibleCols()
+	cells := make([]string, 0, len(visible)+1)
+	cells = append(cells, m.gutterStyle(row).Render(string(m.rowLabel(row))))
+	for _, c := range visible {
 		cells = append(cells, m.renderCell(row, c))
 	}
 	return strings.Join(cells, " ")
+}
+
+// gutterStyle tints the row number of a frozen row, the one declaration a
+// terminal cannot express by position: a pane that stays put while the rest
+// scrolls has no counterpart in a printed grid.
+func (m Model) gutterStyle(row int) lipgloss.Style {
+	if m.frozenRow(row) {
+		return frozenSty
+	}
+	return headStyle
 }
 
 // renderCell styles one grid cell by its kind and cursor state.
@@ -108,6 +131,12 @@ func (m Model) cellStyle(row, col int, value string) lipgloss.Style {
 	}
 	if strings.HasPrefix(m.sourceAt(row, col), "=") {
 		return formulaStyle
+	}
+	if m.state.View.HiddenRows[row+1] || m.state.View.HiddenCols[col+1] {
+		return hiddenSty // only reachable while revealing
+	}
+	if m.headerRow(row) {
+		return headerRowSty
 	}
 	return dataStyle
 }

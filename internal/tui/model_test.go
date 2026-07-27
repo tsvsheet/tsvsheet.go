@@ -509,3 +509,113 @@ func TestDuplicateKeys(t *testing.T) {
 	assert.Equal(t, "2", m2.state.Source[0][2])
 	assert.Equal(t, "Column duplicated.", m2.status)
 }
+
+// TestTUIHidesWhatTheSheetHides proves the terminal honours the declared view:
+// a hidden column is not drawn, and the row numbering never renumbers — the
+// gutter marks the skip instead, because those are still those rows to every
+// formula in the sheet.
+func TestTUIHidesWhatTheSheetHides(t *testing.T) {
+	t.Parallel()
+
+	s, err := session.New([]byte(
+		"#.hide\tcols(range(B:B))\n#.hide\trows(range(2:2))\nname\tscratch\ndrop\tx\nkeep\ty\n"))
+	require.NoError(t, err)
+
+	view := stripANSI(New(s, nil, nil).View())
+	assert.Contains(t, view, "name")
+	assert.NotContains(t, view, "scratch", "the hidden column is not drawn")
+	assert.NotContains(t, view, "drop", "the hidden row is not drawn")
+	assert.Contains(t, view, "⋯3", "and the gutter marks where rows were skipped")
+}
+
+// TestTUIRevealShowsWithoutUnhiding proves the reveal toggle is a view of the
+// file and never an edit to it: the hidden cells appear, the sheet stays clean,
+// and the directive is untouched.
+func TestTUIRevealShowsWithoutUnhiding(t *testing.T) {
+	t.Parallel()
+
+	const src = "#.hide\tcols(range(B:B))\nname\tscratch\nwidget\tx\n"
+	s, err := session.New([]byte(src))
+	require.NoError(t, err)
+
+	revealed := press(t, New(s, nil, nil), "v")
+	assert.Contains(t, stripANSI(revealed.View()), "scratch")
+	assert.Contains(t, stripANSI(revealed.View()), "Showing hidden")
+	assert.Equal(t, src, string(s.Source()), "revealing never writes to the file")
+
+	rehidden := press(t, revealed, "v")
+	assert.NotContains(t, stripANSI(rehidden.View()), "scratch")
+}
+
+// TestTUIRevealSaysSoWhenThereIsNothingToReveal proves a key that would do
+// nothing says why rather than appearing to fail.
+func TestTUIRevealSaysSoWhenThereIsNothingToReveal(t *testing.T) {
+	t.Parallel()
+
+	s, err := session.New([]byte("a\tb\n1\t2\n"))
+	require.NoError(t, err)
+
+	assert.Contains(t, stripANSI(press(t, New(s, nil, nil), "v").View()), "hides nothing")
+}
+
+// TestTUIMarksHeaderAndFrozenRows proves the other two declarations reach the
+// terminal: a header row and a frozen row are drawn differently from data, which
+// is all a printed grid can say about a pane that stays put while others scroll.
+func TestTUIMarksHeaderAndFrozenRows(t *testing.T) {
+	t.Parallel()
+
+	s, err := session.New([]byte(
+		"#.header\trows(count(1))\n#.freeze\trows(count(1))\nname\tqty\nwidget\t3\n"))
+	require.NoError(t, err)
+
+	m := New(s, nil, nil)
+	assert.True(t, m.headerRow(0))
+	assert.True(t, m.frozenRow(0))
+	assert.False(t, m.headerRow(1))
+	assert.NotEmpty(t, stripANSI(m.View()))
+}
+
+// TestTUIRehidingRescuesTheCursor covers the case the reveal toggle must not
+// strand: the cursor sitting on a row or column that disappears when the view
+// is re-hidden. It lands on the nearest rendered one instead — forward if there
+// is anything below, backward when the hidden block runs to the end.
+func TestTUIRehidingRescuesTheCursor(t *testing.T) {
+	t.Parallel()
+
+	// Hidden rows 2-3 of 4: a cursor on row 2 moves down to the visible row 4.
+	down, err := session.New([]byte("#.hide\trows(range(2:3))\na\nb\nc\nd\n"))
+	require.NoError(t, err)
+	m := New(down, nil, nil)
+	m.isRevealing, m.row = true, 1
+	assert.Equal(t, 3, m.toggleReveal().row)
+
+	// Hidden rows 2-4 of 4: nothing below is visible, so it moves back to row 1.
+	up, err := session.New([]byte("#.hide\trows(range(2:4))\na\nb\nc\nd\n"))
+	require.NoError(t, err)
+	tail := New(up, nil, nil)
+	tail.isRevealing, tail.row = true, 3
+	assert.Equal(t, 0, tail.toggleReveal().row)
+
+	// The column axis behaves the same, including the fall back to the last
+	// visible column when the cursor sits beyond every one of them.
+	cols, err := session.New([]byte("#.hide\tcols(range(B:C))\na\tb\tc\n"))
+	require.NoError(t, err)
+	wide := New(cols, nil, nil)
+	wide.isRevealing, wide.col = true, 2
+	assert.Equal(t, 0, wide.toggleReveal().col)
+
+	// A sheet that hides every row is the same case on the other axis.
+	allRows, err := session.New([]byte("#.hide\trows(range(1:2))\na\nb\n"))
+	require.NoError(t, err)
+	empty := New(allRows, nil, nil)
+	empty.isRevealing, empty.row = true, 1
+	assert.Equal(t, 1, empty.toggleReveal().row)
+
+	// A sheet that hides every column has nowhere to put the cursor, so it
+	// stays where it is rather than being moved to a column that is not there.
+	all, err := session.New([]byte("#.hide\tcols(range(A:B))\na\tb\n"))
+	require.NoError(t, err)
+	blank := New(all, nil, nil)
+	blank.isRevealing, blank.col = true, 1
+	assert.Equal(t, 1, blank.toggleReveal().col)
+}
