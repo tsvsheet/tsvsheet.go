@@ -39,6 +39,7 @@ const (
 	cmdCheck    = "check"
 	cmdExplain  = "explain"
 	cmdEval     = "eval"
+	cmdData     = "data"
 	cmdServe    = "serve"
 	cmdTUI      = "tui"
 	cmdComplete = "completion"
@@ -63,8 +64,11 @@ const flagMaxCells = "max-cells"
 // into the command rather than held in a package-level variable.
 type Version string
 
-// loggerConfig holds the global logging flags, bound on the root command.
-var loggerConfig golog.LoggerConfig
+// The global logging flag names, read back from the parsed command.
+const (
+	flagLogLevel  = "log-level"
+	flagLogFormat = "log-format"
+)
 
 // Command builds the root tsv command with the given version. A Before
 // hook configures the default structured logger from the global flags so that
@@ -88,6 +92,7 @@ func Command(v Version) *cli.Command {
 			explainCommand(),
 			evalCommand(),
 			serveCommand(),
+			dataCommand(),
 			tuiCommand(),
 			completionCommand(),
 			manCommand(),
@@ -98,8 +103,12 @@ func Command(v Version) *cli.Command {
 // configureLogger installs the default structured logger from the parsed
 // logging flags. The --max-cells resource cap is applied per command (threaded
 // through the compute path and the editing session), not via a global here.
-func configureLogger(ctx context.Context, _ *cli.Command) (context.Context, error) {
-	slog.SetDefault(loggerConfig.NewLogger(stderr))
+func configureLogger(ctx context.Context, c *cli.Command) (context.Context, error) {
+	cfg := golog.LoggerConfig{
+		Level:  golog.Level(c.String(flagLogLevel)),
+		Format: golog.Format(c.String(flagLogFormat)),
+	}
+	slog.SetDefault(cfg.NewLogger(stderr))
 	return ctx, nil
 }
 
@@ -125,21 +134,26 @@ func maxCellsLimits(c *cli.Command) tsvsheet.Limits {
 }
 
 // loggerFlags builds the global --log-level / --log-format flags.
+//
+// They deliberately carry no Destination. A Destination writes through a pointer
+// fixed when the flag is built, so a package-level target is shared by every
+// root command in the process — two commands parsed concurrently write the same
+// word, which is a data race, and the second parse silently overwrites the
+// first's configuration. The values are read back from the parsed command in
+// configureLogger instead, where they belong to that command alone.
 func loggerFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{
-			Name:        "log-level",
-			Sources:     cli.EnvVars("TSV_LOG_LEVEL"),
-			Value:       "info",
-			Usage:       "Logging level (debug, info, warn, error)",
-			Destination: (*string)(&loggerConfig.Level),
+			Name:    flagLogLevel,
+			Sources: cli.EnvVars("TSV_LOG_LEVEL"),
+			Value:   "info",
+			Usage:   "Logging level (debug, info, warn, error)",
 		},
 		&cli.StringFlag{
-			Name:        "log-format",
-			Sources:     cli.EnvVars("TSV_LOG_FORMAT"),
-			Value:       "text",
-			Usage:       "Log output format (text, json)",
-			Destination: (*string)(&loggerConfig.Format),
+			Name:    flagLogFormat,
+			Sources: cli.EnvVars("TSV_LOG_FORMAT"),
+			Value:   "text",
+			Usage:   "Log output format (text, json)",
 		},
 	}
 }

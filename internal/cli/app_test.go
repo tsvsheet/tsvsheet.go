@@ -60,7 +60,7 @@ func TestCommand_HasAllCommands(t *testing.T) {
 		t,
 		[]string{
 			cmdRender, cmdParse, cmdFromJSON, cmdCheck, cmdExplain,
-			cmdEval, cmdServe, cmdTUI, cmdComplete, cmdMan,
+			cmdEval, cmdServe, cmdData, cmdTUI, cmdComplete, cmdMan,
 		},
 		names,
 	)
@@ -259,4 +259,24 @@ func TestRunExplain_ReadError(t *testing.T) {
 	err := runExplain(streams, explainConfig{source: "-", cell: "A1"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
+}
+
+// TestLoggerFlags_AreNotSharedBetweenCommands guards the fix for a data race:
+// --log-level/--log-format used to write through a Destination pointing at a
+// package-level LoggerConfig, so every root command in the process shared one
+// word. Two commands parsed concurrently raced on it, and the later parse
+// silently redefined the earlier command's logging. Run under -race, two
+// parallel root commands carrying DIFFERENT values are the regression probe.
+func TestLoggerFlags_AreNotSharedBetweenCommands(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeTemp(t, "log.tsvt", "1\n")
+	for _, level := range []string{"debug", "error"} {
+		t.Run(level, func(t *testing.T) {
+			t.Parallel()
+			out, err := runCLI(t, "--log-level", level, "render", sheet)
+			require.NoError(t, err)
+			assert.Contains(t, out, "1")
+		})
+	}
 }
