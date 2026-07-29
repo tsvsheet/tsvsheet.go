@@ -27,9 +27,15 @@ func runImportFlags(t *testing.T, args ...string) (tsvsheet.Fetcher, *importer.C
 	)
 	cmd := &cli.Command{
 		Name:  "x",
-		Flags: importFlags(),
+		Flags: append(importFlags(), dataFlags()...),
 		Action: func(_ context.Context, c *cli.Command) error {
-			gotFetcher, gotCache, gotErr = resolveImport(c)
+			base, closeData, err := resolveData(c)
+			if err != nil {
+				gotErr = err
+				return nil
+			}
+			defer func() { _ = closeData() }()
+			gotFetcher, gotCache, gotErr = resolveImport(c, base)
 			return nil
 		},
 	}

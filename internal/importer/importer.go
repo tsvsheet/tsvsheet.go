@@ -16,6 +16,8 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -46,10 +48,82 @@ const maxRedirects = 5
 // re-validated against this same allowlist.
 type Config struct {
 	Client       *http.Client
+	Base         DataBase
 	AllowedHosts []HostPattern
 	Timeout      time.Duration
 	MaxBytes     ByteSize
 }
+
+// DataBase is the operator-named base that a relative import reference resolves
+// against — the `--data` value. The zero DataBase configures no base, so every
+// relative reference is ErrImportNoBase.
+type DataBase struct {
+	url  *url.URL
+	root string
+}
+
+// NewDataBase validates an operator-supplied base URL. Its scheme must be
+// permitted for its host by the same policy every import obeys — https
+// anywhere, plain http only to loopback — with no exemption for being named on
+// the command line: a base fetched in cleartext would put the values a sheet
+// computes from on the wire, readable and rewritable in transit. The path is
+// normalized to a trailing slash so a relative reference resolves *under* the
+// base rather than beside it.
+func NewDataBase(raw string) (DataBase, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return DataBase{}, constants.ErrImportURL.With(err)
+	}
+	if !schemeAllowed(urlScheme(parsed.Scheme), Host(parsed.Hostname())) {
+		return DataBase{}, constants.ErrImportScheme
+	}
+	root := basePrefix(parsed.Path)
+	parsed.Path = root
+	return DataBase{url: parsed, root: root}, nil
+}
+
+// basePrefix normalizes a base path to a cleaned, trailing-slashed prefix, so
+// containment cannot be satisfied by a sibling whose name merely starts the
+// same way ("/teamster/x" is not under "/team/").
+func basePrefix(p string) string {
+	cleaned := path.Clean("/" + p)
+	if cleaned == "/" {
+		return "/"
+	}
+	return cleaned + "/"
+}
+
+// LoopbackBase builds a base for a data server this process just started at
+// hostport. The URL is constructed rather than parsed: a base we built
+// ourselves cannot be malformed, and an error branch nobody can reach is worse
+// than no branch at all.
+func LoopbackBase(hostport string) DataBase {
+	return DataBase{url: &url.URL{Scheme: "http", Host: hostport, Path: "/"}, root: "/"}
+}
+
+// Configured reports whether a base was supplied. A zero DataBase refuses
+// every relative reference.
+func (b DataBase) Configured() bool { return b.url != nil }
+
+// resolve resolves a relative reference against the base and confines it to it:
+// the resolved path must remain under the base's prefix, so no depth of ".."
+// can climb out.
+func (b DataBase) resolve(ref *url.URL) (*url.URL, error) {
+	if !b.Configured() {
+		return nil, constants.ErrImportNoBase
+	}
+	target := b.url.ResolveReference(ref)
+	if !strings.HasPrefix(path.Clean(target.Path)+"/", b.root) {
+		return nil, constants.ErrImportEscape
+	}
+	return target, nil
+}
+
+// baseOrigin reports whether a reference was resolved against the data base. A
+// base reference is authorized by the operator having named that base, so the
+// host allowlist — which governs URLs written inside a sheet — does not apply
+// to it.
+type baseOrigin bool
 
 // Fetcher is the concrete tsvsheet.Fetcher. Its methods take value receivers and
 // New returns it by value: the struct is effectively immutable after
@@ -57,6 +131,7 @@ type Config struct {
 // never reassigned), so no pointer is required.
 type Fetcher struct {
 	client   *http.Client
+	base     DataBase
 	allowed  []HostPattern
 	timeout  time.Duration
 	maxBytes ByteSize
@@ -73,6 +148,7 @@ func New(cfg Config) Fetcher {
 	}
 	f := Fetcher{
 		client:   client,
+		base:     cfg.Base,
 		allowed:  cfg.AllowedHosts,
 		timeout:  cfg.Timeout,
 		maxBytes: cfg.MaxBytes,
@@ -110,27 +186,79 @@ func (f Fetcher) contextFor() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), f.timeout)
 }
 
-// request builds the validated GET request: the URL must parse, its scheme must
-// be permitted for the host (https anywhere; http only for a loopback target),
-// and its host must be allowlisted — otherwise the matching sentinel, before any
-// network I/O.
+// request builds the validated GET request: the reference resolves (absolute as
+// written, or relative to the data base and confined to it), then the resolved
+// URL is authorized — otherwise the matching sentinel, before any network I/O.
 func (f Fetcher) request(
 	ctx context.Context,
-	url tsvsheet.ImportURL,
+	ref tsvsheet.ImportURL,
 	accept tsvsheet.MediaType,
 ) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, string(url), nil)
+	target, fromBase, err := f.resolve(ref)
 	if err != nil {
-		return nil, constants.ErrImportURL.With(err)
+		return nil, err
 	}
-	if !schemeAllowed(urlScheme(req.URL.Scheme), Host(req.URL.Hostname())) {
-		return nil, constants.ErrImportScheme
+	if err := f.authorize(target, fromBase); err != nil {
+		return nil, err
 	}
-	if !f.hostAllowed(Host(req.URL.Hostname())) {
-		return nil, constants.ErrImportHostDenied
-	}
+	req := newRequest(ctx, target)
 	req.Header.Set("Accept", accept.Accept())
 	return req, nil
+}
+
+// newRequest builds the GET for an already-parsed URL. http.NewRequest would
+// re-parse a string this package has just parsed (directly, or via
+// ResolveReference over parsed inputs), so the only thing it could add is a
+// parse error that cannot happen — an unreachable branch is worse than an
+// explicit construction.
+func newRequest(ctx context.Context, target *url.URL) *http.Request {
+	return (&http.Request{
+		Method:     http.MethodGet,
+		URL:        target,
+		Proto:      "HTTP/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Header:     make(http.Header),
+		Host:       target.Host,
+	}).WithContext(ctx)
+}
+
+// resolve maps an import reference to the URL to fetch. A reference carrying a
+// scheme is absolute and passes through unchanged. A reference with a host but
+// no scheme ("//elsewhere/x") is refused: url.Parse reports it as relative, so
+// resolving it against the base would silently retarget the host — the one way
+// a sheet could otherwise choose its own server. Everything else is relative to
+// the data base.
+func (f Fetcher) resolve(ref tsvsheet.ImportURL) (*url.URL, baseOrigin, error) {
+	parsed, err := url.Parse(string(ref))
+	if err != nil {
+		return nil, false, constants.ErrImportURL.With(err)
+	}
+	if parsed.IsAbs() {
+		return parsed, false, nil
+	}
+	if parsed.Host != "" {
+		return nil, false, constants.ErrImportURL
+	}
+	target, err := f.base.resolve(parsed)
+	return target, true, err
+}
+
+// authorize applies the scheme and allowlist policy to a resolved URL. A
+// reference that came from the data base is already authorized — the operator
+// named that base, and its scheme was validated when it was built — so the
+// allowlist, which governs URLs written inside a sheet, does not apply.
+func (f Fetcher) authorize(target *url.URL, fromBase baseOrigin) error {
+	if fromBase {
+		return nil
+	}
+	if !schemeAllowed(urlScheme(target.Scheme), Host(target.Hostname())) {
+		return constants.ErrImportScheme
+	}
+	if !f.hostAllowed(Host(target.Hostname())) {
+		return constants.ErrImportHostDenied
+	}
+	return nil
 }
 
 // result turns a received response into a FetchResult: only a 2xx status is

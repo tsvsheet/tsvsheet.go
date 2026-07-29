@@ -104,7 +104,7 @@ Examples:
 				Destination: &hidden,
 			},
 			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
-		}, importFlags()...),
+		}, append(importFlags(), dataFlags()...)...),
 		Action: importedAction(
 			func(s Streams, args positional, limits tsvsheet.Limits, fetcher tsvsheet.Fetcher) error {
 				return runRender(

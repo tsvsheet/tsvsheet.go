@@ -75,9 +75,14 @@ Examples:
 				Usage:       `Auto-recompute the browser view: a duration (30s) or an isnow pattern ("M-F +[30mn] >=9 <=17"); 0 disables. Default: 1s when the sheet has clock functions (TODAY/NOW/ISNOW), else off`,
 				Destination: &cfg.refresh,
 			},
-		}, importFlags()...),
+		}, append(importFlags(), dataFlags()...)...),
 		Action: func(ctx context.Context, c *cli.Command) error {
-			fetcher, cache, err := resolveImport(c)
+			base, closeData, err := resolveData(c)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = closeData() }()
+			fetcher, cache, err := resolveImport(c, base)
 			if err != nil {
 				return err
 			}

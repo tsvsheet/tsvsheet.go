@@ -44,9 +44,14 @@ Examples:
 				Usage:       `Recompute the view: a duration (30s) or an isnow pattern ("M-F +[30mn]"); 0 disables. Default: 1s when the sheet has clock functions, else off`,
 				Destination: &cfg.refresh,
 			},
-		}, importFlags()...),
+		}, append(importFlags(), dataFlags()...)...),
 		Action: func(_ context.Context, c *cli.Command) error {
-			fetcher, cache, err := resolveImport(c)
+			base, closeData, err := resolveData(c)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = closeData() }()
+			fetcher, cache, err := resolveImport(c, base)
 			if err != nil {
 				return err
 			}

@@ -89,7 +89,7 @@ Examples:
 				Destination: &isValues,
 			},
 			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
-		}, importFlags()...),
+		}, append(importFlags(), dataFlags()...)...),
 		Action: importedAction(
 			func(s Streams, args positional, limits tsvsheet.Limits, fetcher tsvsheet.Fetcher) error {
 				return runParse(s, args.at(0), valueOutput(isValues), pathAccess(isUnconfined), limits, fetcher)

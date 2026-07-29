@@ -9,11 +9,15 @@ import errs "github.com/gomatic/go-error"
 
 // Keep these constants sorted alphabetically.
 const (
+	ErrDataListen          errs.Const = "failed to bind the data server"
+	ErrDataRoot            errs.Const = "data directory cannot be published"
 	ErrDiagnostics         errs.Const = "sheet has diagnostics"
 	ErrForbidden           errs.Const = "cross-origin request refused"
 	ErrImportContentType   errs.Const = "import content-type malformed"
+	ErrImportEscape        errs.Const = "import reference escapes the data base"
 	ErrImportFetch         errs.Const = "import fetch failed"
 	ErrImportHostDenied    errs.Const = "import host not allowed"
+	ErrImportNoBase        errs.Const = "import reference is relative but no data base is configured"
 	ErrImportRead          errs.Const = "import body read failed"
 	ErrImportRedirect      errs.Const = "import redirect refused"
 	ErrImportScheme        errs.Const = "import scheme not permitted for host"

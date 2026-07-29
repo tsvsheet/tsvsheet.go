@@ -43,19 +43,27 @@ func importFlags() []cli.Flag {
 }
 
 // resolveImport builds the import Fetcher and its refresh cache from the parsed
-// flags: nil (imports off) when --allow-import is absent; ErrInvalidValue when
-// --allow-import is set with no --import-host; otherwise a hardened net/http
-// Fetcher wrapped in a cross-pass cache, returned both as the tsvsheet.Fetcher the
-// engine consumes and as the concrete Cache the frontend clears on refresh.
-func resolveImport(c *cli.Command) (tsvsheet.Fetcher, *importer.Cache, error) {
-	if !c.Bool(flagAllowImport) {
-		return nil, nil, nil
-	}
+// flags and the resolved data base: nil (imports off) when neither
+// --allow-import nor --data is given; ErrInvalidValue when --allow-import is set
+// with no --import-host; otherwise a hardened net/http Fetcher wrapped in a
+// cross-pass cache, returned both as the tsvsheet.Fetcher the engine consumes
+// and as the concrete Cache the frontend clears on refresh.
+//
+// A base alone builds a Fetcher with an EMPTY allowlist: relative references
+// resolve, and an absolute URL written in the sheet is still denied. Naming the
+// base authorizes the base — it never widens the allowlist, which continues to
+// govern only the URLs a sheet writes for itself.
+func resolveImport(c *cli.Command, base importer.DataBase) (tsvsheet.Fetcher, *importer.Cache, error) {
+	allow := c.Bool(flagAllowImport)
 	hosts := c.StringSlice(flagImportHost)
-	if len(hosts) == 0 {
+	if allow && len(hosts) == 0 {
 		return nil, nil, tsvsheet.ErrInvalidValue.With(nil, "message", importHostRequired)
 	}
+	if !allow && !base.Configured() {
+		return nil, nil, nil
+	}
 	cache := importer.NewCache(importer.New(importer.Config{
+		Base:         base,
 		AllowedHosts: hostPatterns(hosts),
 		Timeout:      importTimeout,
 		MaxBytes:     importMaxBytes,
@@ -87,7 +95,12 @@ func wireRefresh(sess *session.Session, cache *importer.Cache) {
 // failures surface as the command's error.
 func importedAction(fn func(Streams, positional, tsvsheet.Limits, tsvsheet.Fetcher) error) cli.ActionFunc {
 	return func(_ context.Context, c *cli.Command) error {
-		fetcher, _, err := resolveImport(c)
+		base, closeData, err := resolveData(c)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = closeData() }()
+		fetcher, _, err := resolveImport(c, base)
 		if err != nil {
 			return err
 		}
