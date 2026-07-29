@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,12 +10,15 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// explainConfig binds the explain command's source, target cell, and output
-// form.
+// explainConfig binds the explain command's source, target cell, output form,
+// and the compute environment a trace resolves against.
 type explainConfig struct {
-	source sourcePath
-	cell   string
-	isJSON bool
+	fetcher      tsvsheet.Fetcher
+	source       sourcePath
+	cell         string
+	limits       tsvsheet.Limits
+	isJSON       bool
+	isUnconfined pathAccess
 }
 
 // jsonOutput selects the JSON rendering of a trace.
@@ -37,7 +41,8 @@ func runExplain(streams Streams, cfg explainConfig) error {
 	if err != nil {
 		return err
 	}
-	trace, err := tsvsheet.Explain(parsed, at)
+	trace, err := tsvsheet.ExplainWith(parsed, at,
+		computeOptions(cfg.source, cfg.isUnconfined, cfg.limits, cfg.fetcher))
 	if err != nil {
 		return err
 	}
@@ -61,7 +66,26 @@ func writeTraceText(w io.Writer, trace tsvsheet.Trace) error {
 	for _, in := range trace.Inputs {
 		_, _ = fmt.Fprintf(w, "  %s = %s\n", in.Ref, in.Value)
 	}
+	writeTraceImports(w, trace.Imports)
 	return nil
+}
+
+// writeTraceImports reports where each IMPORT* in the formula went. Every import
+// failure is the same #IMPORT! in the grid, so this is the only place the
+// specific reason is visible.
+func writeTraceImports(w io.Writer, imports []tsvsheet.TraceImport) {
+	for _, imp := range imports {
+		_, _ = fmt.Fprintf(w, "  import %s -> %s\n", imp.Source, importOutcome(imp))
+	}
+}
+
+// importOutcome renders one import's result: the URL it reached, or why it
+// did not.
+func importOutcome(imp tsvsheet.TraceImport) string {
+	if imp.Error != "" {
+		return "FAILED: " + imp.Error
+	}
+	return imp.URL
 }
 
 // writeJSON encodes v as indented JSON followed by a newline.
@@ -73,6 +97,7 @@ func writeJSON(w io.Writer, v any) error {
 
 // explainCommand builds the `explain` command.
 func explainCommand() *cli.Command {
+	isUnconfined := false
 	cfg := explainConfig{}
 	return &cli.Command{
 		Name:      cmdExplain,
@@ -82,20 +107,40 @@ func explainCommand() *cli.Command {
 literal), and the resolved value of each cell the formula reads. The cell is
 required and positional; the sheet follows (omitted or "-" reads stdin).
 
+An IMPORT* formula also reports where each import went — the URL it resolved
+to, or the specific reason it failed. Every import failure is the same opaque
+#IMPORT! in the grid, so this is the only place a denied host and a traversal
+above the data base look different.
+
 Examples:
   tsv explain D2 sheet.tsvt
-  tsv explain D2 --json sheet.tsvt`,
-		Flags: []cli.Flag{
+  tsv explain D2 --json sheet.tsvt
+  tsv explain A1 --data ./data sheet.tsvt`,
+		Flags: append([]cli.Flag{
 			&cli.BoolFlag{
 				Name:        jsonFlag,
 				Usage:       "Emit the trace as JSON",
 				Destination: &cfg.isJSON,
 			},
-		},
-		Action: streamAction(func(s Streams, args positional) error {
+			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
+		}, append(importFlags(), dataFlags()...)...),
+		Action: func(_ context.Context, c *cli.Command) error {
+			base, closeData, err := resolveData(c)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = closeData() }()
+			fetcher, _, err := resolveImport(c, base)
+			if err != nil {
+				return err
+			}
+			args := positional(c.Args().Slice())
 			cfg.cell = args.text(0)
 			cfg.source = args.at(1)
-			return runExplain(s, cfg)
-		}),
+			cfg.isUnconfined = pathAccess(isUnconfined)
+			cfg.limits = maxCellsLimits(c)
+			cfg.fetcher = fetcher
+			return runExplain(Streams{In: stdin, Out: c.Root().Writer, Err: stderr}, cfg)
+		},
 	}
 }

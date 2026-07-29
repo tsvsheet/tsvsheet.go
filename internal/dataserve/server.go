@@ -35,10 +35,14 @@ const LoopbackAny Addr = "127.0.0.1:0"
 // so a stalled peer cannot pin a connection open indefinitely.
 const headerTimeout = 10 * time.Second
 
+// MediaType is the Content-Type a published file is served as — the value an
+// IMPORT* handshake matches against.
+type MediaType string
+
 // mediaTypes maps a published file extension to the media type an IMPORT*
 // handshake accepts. A file with any other extension is not served at all —
 // this server publishes tabular data, not a directory.
-var mediaTypes = map[string]string{
+var mediaTypes = map[string]MediaType{
 	".tsv": "text/tab-separated-values",
 	".csv": "text/csv",
 }
@@ -130,7 +134,7 @@ func checkRoot(root Root) error {
 // writer that may never come, which would pin the handler — and, for a scoped
 // server, the command that started it — indefinitely. Opening first and judging
 // the mode afterwards also closes the race a stat-then-open would leave.
-func serveFile(w http.ResponseWriter, r *http.Request, root Root, media string) {
+func serveFile(w http.ResponseWriter, r *http.Request, root Root, media MediaType) {
 	confined, err := os.OpenRoot(string(root))
 	if err != nil {
 		http.Error(w, "data root unavailable", http.StatusInternalServerError)
@@ -149,12 +153,12 @@ func serveFile(w http.ResponseWriter, r *http.Request, root Root, media string) 
 
 // writeFile streams a regular file with its media type. Anything else — a
 // directory, a FIFO, a device — is refused before a single header is written.
-func writeFile(w http.ResponseWriter, file *os.File, media string) {
+func writeFile(w http.ResponseWriter, file *os.File, media MediaType) {
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
 		http.Error(w, "not a regular file", http.StatusNotFound)
 		return
 	}
-	w.Header().Set("Content-Type", media)
+	w.Header().Set("Content-Type", string(media))
 	_, _ = io.Copy(w, file)
 }

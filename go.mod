@@ -10,7 +10,7 @@ require (
 	github.com/gomatic/go-log v0.3.10
 	github.com/stretchr/testify v1.11.1
 	github.com/tsvsheet/go-isnow v0.1.7
-	github.com/tsvsheet/go-tsvsheet v0.21.1
+	github.com/tsvsheet/go-tsvsheet v0.22.0
 	github.com/urfave/cli/v3 v3.10.1
 )
 

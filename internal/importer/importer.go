@@ -14,26 +14,14 @@ import (
 	"context"
 	"io"
 	"mime"
-	"net"
 	"net/http"
 	"net/url"
-	"path"
-	"strings"
 	"time"
 
 	"github.com/tsvsheet/go-tsvsheet"
 
 	"github.com/tsvsheet/tsvsheet.go/internal/constants"
 )
-
-// HostPattern is one allowlist entry: an exact host ("example.com") or a
-// leading-"*." wildcard ("*.example.com") that matches any proper subdomain but
-// never the apex.
-type HostPattern string
-
-// Host is a request URL's hostname (port and IPv6 brackets already stripped),
-// checked against the allowlist.
-type Host string
 
 // ByteSize is a byte count — the maximum import body the Fetcher will read.
 type ByteSize int64
@@ -53,77 +41,6 @@ type Config struct {
 	Timeout      time.Duration
 	MaxBytes     ByteSize
 }
-
-// DataBase is the operator-named base that a relative import reference resolves
-// against — the `--data` value. The zero DataBase configures no base, so every
-// relative reference is ErrImportNoBase.
-type DataBase struct {
-	url  *url.URL
-	root string
-}
-
-// NewDataBase validates an operator-supplied base URL. Its scheme must be
-// permitted for its host by the same policy every import obeys — https
-// anywhere, plain http only to loopback — with no exemption for being named on
-// the command line: a base fetched in cleartext would put the values a sheet
-// computes from on the wire, readable and rewritable in transit. The path is
-// normalized to a trailing slash so a relative reference resolves *under* the
-// base rather than beside it.
-func NewDataBase(raw string) (DataBase, error) {
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return DataBase{}, constants.ErrImportURL.With(err)
-	}
-	if !schemeAllowed(urlScheme(parsed.Scheme), Host(parsed.Hostname())) {
-		return DataBase{}, constants.ErrImportScheme
-	}
-	root := basePrefix(parsed.Path)
-	parsed.Path = root
-	return DataBase{url: parsed, root: root}, nil
-}
-
-// basePrefix normalizes a base path to a cleaned, trailing-slashed prefix, so
-// containment cannot be satisfied by a sibling whose name merely starts the
-// same way ("/teamster/x" is not under "/team/").
-func basePrefix(p string) string {
-	cleaned := path.Clean("/" + p)
-	if cleaned == "/" {
-		return "/"
-	}
-	return cleaned + "/"
-}
-
-// LoopbackBase builds a base for a data server this process just started at
-// hostport. The URL is constructed rather than parsed: a base we built
-// ourselves cannot be malformed, and an error branch nobody can reach is worse
-// than no branch at all.
-func LoopbackBase(hostport string) DataBase {
-	return DataBase{url: &url.URL{Scheme: "http", Host: hostport, Path: "/"}, root: "/"}
-}
-
-// Configured reports whether a base was supplied. A zero DataBase refuses
-// every relative reference.
-func (b DataBase) Configured() bool { return b.url != nil }
-
-// resolve resolves a relative reference against the base and confines it to it:
-// the resolved path must remain under the base's prefix, so no depth of ".."
-// can climb out.
-func (b DataBase) resolve(ref *url.URL) (*url.URL, error) {
-	if !b.Configured() {
-		return nil, constants.ErrImportNoBase
-	}
-	target := b.url.ResolveReference(ref)
-	if !strings.HasPrefix(path.Clean(target.Path)+"/", b.root) {
-		return nil, constants.ErrImportEscape
-	}
-	return target, nil
-}
-
-// baseOrigin reports whether a reference was resolved against the data base. A
-// base reference is authorized by the operator having named that base, so the
-// host allowlist — which governs URLs written inside a sheet — does not apply
-// to it.
-type baseOrigin bool
 
 // Fetcher is the concrete tsvsheet.Fetcher. Its methods take value receivers and
 // New returns it by value: the struct is effectively immutable after
@@ -173,7 +90,12 @@ func (f Fetcher) Fetch(url tsvsheet.ImportURL, accept tsvsheet.MediaType) (tsvsh
 		return tsvsheet.FetchResult{}, constants.ErrImportFetch.With(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	return f.result(resp)
+	res, err := f.result(resp)
+	// The engine passed a source, not a URL: a relative one was resolved here,
+	// against a base the engine never sees. Report where it actually went so
+	// EXPLAIN can show it.
+	res.URL = tsvsheet.ImportURL(req.URL.String())
+	return res, err
 }
 
 // contextFor returns the per-request context: a deadline of f.timeout, or a
@@ -194,11 +116,11 @@ func (f Fetcher) request(
 	ref tsvsheet.ImportURL,
 	accept tsvsheet.MediaType,
 ) (*http.Request, error) {
-	target, fromBase, err := f.resolve(ref)
+	target, isFromBase, err := f.resolve(ref)
 	if err != nil {
 		return nil, err
 	}
-	if err := f.authorize(target, fromBase); err != nil {
+	if err := f.authorize(target, isFromBase); err != nil {
 		return nil, err
 	}
 	req := newRequest(ctx, target)
@@ -208,9 +130,9 @@ func (f Fetcher) request(
 
 // newRequest builds the GET for an already-parsed URL. http.NewRequest would
 // re-parse a string this package has just parsed (directly, or via
-// ResolveReference over parsed inputs), so the only thing it could add is a
-// parse error that cannot happen — an unreachable branch is worse than an
-// explicit construction.
+// ResolveReference over parsed inputs); its parse error would then be a branch
+// no input reaches, and an untestable branch is worse than an explicit
+// construction.
 func newRequest(ctx context.Context, target *url.URL) *http.Request {
 	return (&http.Request{
 		Method:     http.MethodGet,
@@ -248,8 +170,8 @@ func (f Fetcher) resolve(ref tsvsheet.ImportURL) (*url.URL, baseOrigin, error) {
 // reference that came from the data base is already authorized — the operator
 // named that base, and its scheme was validated when it was built — so the
 // allowlist, which governs URLs written inside a sheet, does not apply.
-func (f Fetcher) authorize(target *url.URL, fromBase baseOrigin) error {
-	if fromBase {
+func (f Fetcher) authorize(target *url.URL, isFromBase baseOrigin) error {
+	if isFromBase {
 		return nil
 	}
 	if !schemeAllowed(urlScheme(target.Scheme), Host(target.Hostname())) {
@@ -307,70 +229,6 @@ func (f Fetcher) checkRedirect(req *http.Request, via []*http.Request) error {
 		return constants.ErrImportRedirect
 	}
 	return nil
-}
-
-// hostAllowed reports whether host matches any allowlist entry; an empty
-// allowlist denies everything.
-func (f Fetcher) hostAllowed(host Host) bool {
-	for _, pattern := range f.allowed {
-		if matchHost(pattern, host) {
-			return true
-		}
-	}
-	return false
-}
-
-// matchHost reports whether host satisfies pattern, case-insensitively: a
-// leading "*." is a subdomain wildcard, anything else is an exact host.
-func matchHost(pattern HostPattern, host Host) bool {
-	p := strings.ToLower(string(pattern))
-	h := strings.ToLower(string(host))
-	if suffix, ok := strings.CutPrefix(p, "*."); ok {
-		return wildcardMatch(Host(suffix), Host(h))
-	}
-	return p == h
-}
-
-// wildcardMatch reports whether host is a proper subdomain of suffix: host must
-// end with "."+suffix AND carry a non-empty label before it. This rejects the
-// apex ("example.com" does not end with ".example.com"), the lookalike
-// ("evilexample.com" — the char before "example.com" is a letter, not a dot),
-// and the bare-suffix trick (".example.com" — the label before the dot is
-// empty).
-func wildcardMatch(suffix, host Host) bool {
-	label, ok := strings.CutSuffix(string(host), "."+string(suffix))
-	return ok && label != ""
-}
-
-// urlScheme is a request URL's scheme ("https" or "http"), checked by the scheme
-// policy against the target host.
-type urlScheme string
-
-// schemeAllowed reports whether scheme may reach host: https is permitted for
-// any host, plain http only for a loopback target (a local service — reaching
-// localhost/LAN is a primary import use case, ADR 0006 §8). Every other
-// combination (http to a remote host, or a non-http(s) scheme) is rejected.
-func schemeAllowed(scheme urlScheme, host Host) bool {
-	switch scheme {
-	case "https":
-		return true
-	case "http":
-		return IsLoopback(host)
-	default:
-		return false
-	}
-}
-
-// IsLoopback reports whether host targets the local machine: the name
-// "localhost" (case-insensitive) or any loopback IP literal (127.0.0.0/8, ::1).
-// It is the shared classifier the importer's scheme policy and serve's
-// import-exposure guard both consult.
-func IsLoopback(host Host) bool {
-	if strings.EqualFold(string(host), "localhost") {
-		return true
-	}
-	ip := net.ParseIP(string(host))
-	return ip != nil && ip.IsLoopback()
 }
 
 // normalizeContentType parses the response Content-Type and returns its base

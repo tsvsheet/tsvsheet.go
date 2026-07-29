@@ -92,7 +92,7 @@ func TestResolveData_MistypedDirectoryFailsAtStartup(t *testing.T) {
 	assert.False(t, base.Configured())
 }
 
-func TestHasScheme_DistinguishesURLsFromPaths(t *testing.T) {
+func TestDataSpec_DistinguishesURLsFromPaths(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]bool{
@@ -104,7 +104,7 @@ func TestHasScheme_DistinguishesURLsFromPaths(t *testing.T) {
 		`C:\data`:                   false, // a Windows drive is a path, not a scheme
 	}
 	for raw, want := range cases {
-		assert.Equal(t, want, hasScheme(raw), raw)
+		assert.Equal(t, want, dataSpec(raw).hasScheme(), raw)
 	}
 }
 
@@ -217,4 +217,63 @@ func TestLoopbackBase_ResolvesWithoutParsing(t *testing.T) {
 
 	base := importer.LoopbackBase("127.0.0.1:8137")
 	assert.True(t, base.Configured())
+}
+
+// TestExplain_ReportsWhereAnImportWent is the diagnostic contract: every import
+// failure is the same opaque #IMPORT! in the grid, so explain is the only place
+// an author can see the resolved URL or the specific reason.
+func TestExplain_ReportsWhereAnImportWent(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeTemp(t, "imp.tsvt", "=importcell(\"balances.tsv\")\n")
+	out, err := runCLI(t, "explain", "A1", "--data", dataDir(t), sheet)
+	require.NoError(t, err)
+	assert.Contains(t, out, "import balances.tsv -> http://127.0.0.1:")
+	assert.Contains(t, out, "/balances.tsv")
+}
+
+func TestExplain_ReportsWhyAnImportFailed(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeTemp(t, "bad.tsvt", "=importcell(\"nope.tsv\")\n")
+	out, err := runCLI(t, "explain", "A1", "--data", dataDir(t), sheet)
+	require.NoError(t, err)
+	assert.Contains(t, out, "A1 = #IMPORT!")
+	assert.Contains(t, out, "FAILED: ")
+}
+
+func TestExplain_JSONCarriesTheImportTrace(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeTemp(t, "impj.tsvt", "=importcell(\"balances.tsv\")\n")
+	out, err := runCLI(t, "explain", "A1", "--json", "--data", dataDir(t), sheet)
+	require.NoError(t, err)
+	assert.Contains(t, out, `"imports"`)
+	assert.Contains(t, out, `"source": "balances.tsv"`)
+}
+
+func TestExplain_WithoutImportsReportsNoImportLines(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeTemp(t, "plain.tsvt", "2\t3\t=A1+B1\n")
+	out, err := runCLI(t, "explain", "C1", sheet)
+	require.NoError(t, err)
+	assert.Contains(t, out, "C1 = 5")
+	assert.NotContains(t, out, "import ")
+}
+
+func TestExplain_BadDataFlagFailsBeforeTracing(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeTemp(t, "e.tsvt", "1\n")
+	_, err := runCLI(t, "explain", "A1", "--data", "http://data.example.com/", sheet)
+	require.ErrorIs(t, err, constants.ErrImportScheme)
+}
+
+func TestExplain_BadImportFlagsFailBeforeTracing(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeTemp(t, "ei.tsvt", "1\n")
+	_, err := runCLI(t, "explain", "A1", "--allow-import", sheet)
+	require.Error(t, err, "--allow-import with no --import-host is a configuration error")
 }

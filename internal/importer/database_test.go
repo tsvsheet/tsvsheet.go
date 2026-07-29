@@ -1,6 +1,8 @@
 package importer
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +24,7 @@ func TestNewDataBase_SchemePolicyHasNoExemption(t *testing.T) {
 		"data/balances.tsv":              constants.ErrImportScheme, // no scheme at all
 	}
 	for raw, want := range cases {
-		_, err := NewDataBase(raw)
+		_, err := NewDataBase(BaseURL(raw))
 		if want == nil {
 			require.NoError(t, err, raw)
 			continue
@@ -34,14 +36,14 @@ func TestNewDataBase_SchemePolicyHasNoExemption(t *testing.T) {
 func TestNewDataBase_MalformedURL(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewDataBase("https://exa mple.com/\x7f")
+	_, err := NewDataBase(BaseURL("https://exa mple.com/\x7f"))
 	require.ErrorIs(t, err, constants.ErrImportURL)
 }
 
 func TestBasePrefix_NormalizesToTrailingSlash(t *testing.T) {
 	t.Parallel()
 
-	cases := map[string]string{
+	cases := map[basePath]basePath{
 		"":           "/",
 		"/":          "/",
 		"/team":      "/team/",
@@ -50,7 +52,7 @@ func TestBasePrefix_NormalizesToTrailingSlash(t *testing.T) {
 		"/team/sub/": "/team/sub/",
 	}
 	for in, want := range cases {
-		assert.Equal(t, want, basePrefix(in), in)
+		assert.Equal(t, want, basePrefix(in), string(in))
 	}
 }
 
@@ -67,7 +69,7 @@ func TestFetcherResolve_AbsolutePassesThroughUnchanged(t *testing.T) {
 func TestFetcherResolve_RelativeResolvesUnderTheBase(t *testing.T) {
 	t.Parallel()
 
-	base, err := NewDataBase("https://data.example.com/team")
+	base, err := NewDataBase(BaseURL("https://data.example.com/team"))
 	require.NoError(t, err)
 	f := New(Config{Base: base})
 
@@ -88,7 +90,7 @@ func TestFetcherResolve_RelativeResolvesUnderTheBase(t *testing.T) {
 func TestFetcherResolve_TraversalAboveTheBaseIsRefused(t *testing.T) {
 	t.Parallel()
 
-	base, err := NewDataBase("https://data.example.com/team/")
+	base, err := NewDataBase(BaseURL("https://data.example.com/team/"))
 	require.NoError(t, err)
 	f := New(Config{Base: base})
 
@@ -109,7 +111,7 @@ func TestFetcherResolve_TraversalAboveTheBaseIsRefused(t *testing.T) {
 func TestFetcherResolve_SiblingPrefixIsNotUnderTheBase(t *testing.T) {
 	t.Parallel()
 
-	base, err := NewDataBase("https://data.example.com/team/")
+	base, err := NewDataBase(BaseURL("https://data.example.com/team/"))
 	require.NoError(t, err)
 	f := New(Config{Base: base})
 
@@ -120,7 +122,7 @@ func TestFetcherResolve_SiblingPrefixIsNotUnderTheBase(t *testing.T) {
 func TestFetcherResolve_SchemeRelativeReferenceCannotRetargetTheHost(t *testing.T) {
 	t.Parallel()
 
-	base, err := NewDataBase("https://data.example.com/team/")
+	base, err := NewDataBase(BaseURL("https://data.example.com/team/"))
 	require.NoError(t, err)
 	f := New(Config{Base: base})
 
@@ -145,4 +147,108 @@ func TestFetcherResolve_MalformedReference(t *testing.T) {
 	f := New(Config{})
 	_, _, err := f.resolve("://nonsense")
 	require.ErrorIs(t, err, constants.ErrImportURL)
+}
+
+// tabularServer answers every request with a TSV body, and records the paths it
+// was asked for so a test can assert what the base resolved to.
+func tabularServer(t *testing.T, seen *[]string) *httptest.Server {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*seen = append(*seen, r.URL.Path)
+		w.Header().Set("Content-Type", "text/tab-separated-values")
+		_, _ = w.Write([]byte("Brokerage\t310000\n"))
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func TestFetch_RelativeReferenceResolvesAgainstTheBaseWithNoAllowlist(t *testing.T) {
+	t.Parallel()
+
+	var seen []string
+	server := tabularServer(t, &seen)
+	base, err := NewDataBase(BaseURL(server.URL + "/team"))
+	require.NoError(t, err)
+
+	// No AllowedHosts at all: naming the base is the authorization, and it must
+	// not require handing out network permission via --import-host.
+	fetcher := New(Config{Base: base, MaxBytes: 1 << 20})
+
+	res, err := fetcher.Fetch("balances.tsv", "application/vnd.tsvsheet+tsv")
+	require.NoError(t, err)
+	assert.Equal(t, "Brokerage\t310000\n", string(res.Body))
+	assert.Equal(t, []string{"/team/balances.tsv"}, seen, "resolved under the base, not beside it")
+}
+
+func TestFetch_AbsoluteURLStillNeedsTheAllowlistEvenWithABase(t *testing.T) {
+	t.Parallel()
+
+	var seen []string
+	server := tabularServer(t, &seen)
+	base, err := NewDataBase(BaseURL(server.URL + "/team/"))
+	require.NoError(t, err)
+	fetcher := New(Config{Base: base, MaxBytes: 1 << 20})
+
+	// The very same host, written absolutely in the sheet, is refused: a base
+	// authorizes the base, never a host.
+	_, err = fetcher.Fetch(tsvsheet.ImportURL(server.URL+"/team/balances.tsv"), "application/vnd.tsvsheet+tsv")
+	require.ErrorIs(t, err, constants.ErrImportHostDenied)
+	assert.Empty(t, seen, "refused before any network I/O")
+}
+
+func TestFetch_RelativeReferenceWithNoBaseNeverReachesTheNetwork(t *testing.T) {
+	t.Parallel()
+
+	var seen []string
+	_ = tabularServer(t, &seen)
+	fetcher := New(Config{MaxBytes: 1 << 20})
+
+	_, err := fetcher.Fetch("balances.tsv", "application/vnd.tsvsheet+tsv")
+	require.ErrorIs(t, err, constants.ErrImportNoBase)
+	assert.Empty(t, seen)
+}
+
+func TestFetch_TraversalAboveTheBaseNeverReachesTheNetwork(t *testing.T) {
+	t.Parallel()
+
+	var seen []string
+	server := tabularServer(t, &seen)
+	base, err := NewDataBase(BaseURL(server.URL + "/team/"))
+	require.NoError(t, err)
+	fetcher := New(Config{Base: base, MaxBytes: 1 << 20})
+
+	_, err = fetcher.Fetch("../../admin/keys.tsv", "application/vnd.tsvsheet+tsv")
+	require.ErrorIs(t, err, constants.ErrImportEscape)
+	assert.Empty(t, seen, "the refusal happens before the request is built")
+}
+
+func TestFetch_UnparseableReferenceIsRejected(t *testing.T) {
+	t.Parallel()
+
+	base, err := NewDataBase(BaseURL("http://127.0.0.1:1/"))
+	require.NoError(t, err)
+	fetcher := New(Config{Base: base, MaxBytes: 1 << 20})
+
+	// Resolves against the base, but is not a URL http.NewRequest will accept.
+	_, err = fetcher.Fetch("\x7f\x00", "application/vnd.tsvsheet+tsv")
+	require.ErrorIs(t, err, constants.ErrImportURL)
+}
+
+func TestLoopbackBase_ResolvesRelativeReferences(t *testing.T) {
+	t.Parallel()
+
+	var seen []string
+	server := tabularServer(t, &seen)
+	// The shape startScopedData uses: a base built from an address this process
+	// just bound, never parsed from text.
+	fetcher := New(Config{
+		Base:     LoopbackBase(HostPort(server.Listener.Addr().String())),
+		MaxBytes: 1 << 20,
+	})
+
+	res, err := fetcher.Fetch("balances.tsv", "application/vnd.tsvsheet+tsv")
+	require.NoError(t, err)
+	assert.Equal(t, "Brokerage\t310000\n", string(res.Body))
+	assert.Equal(t, []string{"/balances.tsv"}, seen)
 }

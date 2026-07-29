@@ -23,6 +23,10 @@ const (
 		"data server, or a directory to publish for this run (bound to loopback, stopped on exit)"
 )
 
+// dataSpec is the raw --data value before it is classified: either a URL naming
+// an existing data server, or a directory to publish for this run.
+type dataSpec string
+
 // dataCloser releases a data server started for the duration of a command. It is
 // a no-op when --data named an existing server, or was not given at all, so every
 // caller can defer it unconditionally.
@@ -44,33 +48,33 @@ func dataFlags() []cli.Flag {
 // as a deferred #IMPORT! at compute time. Anything else is a directory: a server
 // is started on loopback for this run, and the returned closer stops it.
 func resolveData(c *cli.Command) (importer.DataBase, dataCloser, error) {
-	raw := c.String(flagData)
-	if raw == "" {
+	spec := dataSpec(c.String(flagData))
+	if spec == "" {
 		return importer.DataBase{}, noCloseData, nil
 	}
-	if !hasScheme(raw) {
-		return startScopedData(raw)
+	if !spec.hasScheme() {
+		return startScopedData(dataserve.Root(spec))
 	}
-	base, err := importer.NewDataBase(raw)
+	base, err := importer.NewDataBase(importer.BaseURL(spec))
 	return base, noCloseData, err
 }
 
 // hasScheme reports whether raw is an absolute URL, which is what distinguishes
 // "use this server" from "publish this directory". A single-letter scheme is
 // treated as a path so a Windows drive ("C:\data") stays a directory.
-func hasScheme(raw string) bool {
-	parsed, err := url.Parse(raw)
+func (d dataSpec) hasScheme() bool {
+	parsed, err := url.Parse(string(d))
 	return err == nil && len(parsed.Scheme) > 1
 }
 
 // startScopedData publishes dir on loopback for the life of one command and
 // returns its base plus the closer that stops it.
-func startScopedData(dir string) (importer.DataBase, dataCloser, error) {
-	server, err := dataserve.Start(dataserve.Root(dir), dataserve.LoopbackAny)
+func startScopedData(dir dataserve.Root) (importer.DataBase, dataCloser, error) {
+	server, err := dataserve.Start(dir, dataserve.LoopbackAny)
 	if err != nil {
 		return importer.DataBase{}, noCloseData, err
 	}
-	return importer.LoopbackBase(server.Addr()), server.Close, nil
+	return importer.LoopbackBase(importer.HostPort(server.Addr())), server.Close, nil
 }
 
 // dataConfig binds the data command's published directory and bind address.
