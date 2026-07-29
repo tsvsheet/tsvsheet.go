@@ -121,12 +121,54 @@ func scheduleSpecs(schedules []string) []refresh.Spec {
 // saver builds the persist function: it writes the session's current source
 // back to the spreadsheet file. The plain func() error is assignable to both
 // serve.Saver and tui.Saver.
+//
+// The write is confined and atomic. Confined: it goes through os.Root on the
+// sheet's own directory, so a sheet path that is a symlink out of that directory
+// cannot be used to overwrite the file it points at. Atomic: the bytes land in a
+// temporary file that is then renamed over the sheet, so an interrupted save
+// leaves the previous sheet intact instead of a truncated one — a plain
+// os.WriteFile truncates first and would destroy the sheet if the process died
+// mid-write.
 func saver(sess *session.Session, source sourcePath) func() error {
-	path := filepath.Clean(string(source))
-	return func() error {
-		if err := os.WriteFile(path, sess.Source(), filePerm); err != nil {
-			return tsvsheet.ErrWriteFile.With(err, path)
-		}
-		return nil
+	dir, file := filepath.Split(filepath.Clean(string(source)))
+	if dir == "" {
+		dir = "."
 	}
+	return func() error { return saveAtomic(dir, file, sess.Source()) }
 }
+
+// saveAtomic writes data as file inside dir, via a temporary file in that same
+// directory and a rename. Same-directory is required: a rename is only atomic
+// within one filesystem.
+func saveAtomic(dir, file string, data []byte) error {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return tsvsheet.ErrWriteFile.With(err, dir)
+	}
+	defer func() { _ = root.Close() }()
+	tmp := file + tempSuffix
+	if err := writeFileIn(root, tmp, data, filePerm); err != nil {
+		return tsvsheet.ErrWriteFile.With(err, tmp)
+	}
+	if err := renameIn(root, tmp, file); err != nil {
+		_ = root.Remove(tmp)
+		return tsvsheet.ErrWriteFile.With(err, file)
+	}
+	return nil
+}
+
+// tempSuffix names the staging file a save renames from.
+const tempSuffix = ".tsv-save"
+
+// The two filesystem operations a save performs, as package vars so a test can
+// force each failure. Go offers no way to make a real write or rename fail at a
+// direct call site, and each branch carries a contract worth asserting: whichever
+// step fails, the previous sheet must still be on disk and no staging file may be
+// left behind. Tests stub these and must restore them, so they cannot run in
+// parallel with each other.
+var (
+	writeFileIn = func(root *os.Root, name string, data []byte, perm os.FileMode) error {
+		return root.WriteFile(name, data, perm)
+	}
+	renameIn = func(root *os.Root, from, to string) error { return root.Rename(from, to) }
+)
