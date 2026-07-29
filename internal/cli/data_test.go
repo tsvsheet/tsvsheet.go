@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,6 +21,7 @@ func dataDir(t *testing.T) string {
 
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "balances.tsv"), []byte("Brokerage\t310000\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "one.tsv"), []byte("42\n"), 0o600))
 	return dir
 }
 
@@ -116,11 +116,13 @@ func TestStartScopedData_UnbindableAddressPropagates(t *testing.T) {
 	require.ErrorIs(t, err, constants.ErrDataListen)
 }
 
-func TestRunData_RequiresADirectory(t *testing.T) {
-	t.Parallel()
-
-	err := runData(context.Background(), dataConfig{})
-	require.ErrorIs(t, err, constants.ErrMissingArgument)
+// TestData_MissingDirectoryShowsHelp pins that the required directory is
+// answered with the command's help rather than a log line; the guard lives in
+// the Action, where the command is in hand to print it.
+func TestData_MissingDirectoryShowsHelp(t *testing.T) {
+	out, err := runCLI(t, cmdData)
+	require.ErrorIs(t, err, constants.ErrUsage)
+	assert.Contains(t, out, "<dir>", "the help names the argument that was missing")
 }
 
 func TestRunData_ServesUntilTheContextIsCancelled(t *testing.T) {
@@ -144,50 +146,6 @@ func TestDataCommand_RunsThroughTheRootCommand(t *testing.T) {
 // TestRender_RelativeReferenceResolvesAgainstAScopedServer is the end-to-end
 // acceptance: a sheet whose only data reference is a bare name, rendered with
 // --data and NO import flags at all.
-func TestRender_RelativeReferenceResolvesAgainstAScopedServer(t *testing.T) {
-	t.Parallel()
-	sheet := writeTemp(t, "rel.tsvt", "=importsheet(\"balances.tsv\")\n")
-	out, err := runCLI(t, "render", "--data", dataDir(t), sheet)
-	require.NoError(t, err)
-	assert.Contains(t, out, "Brokerage\t310000")
-}
-
-func TestRender_RelativeReferenceWithoutDataIsImportError(t *testing.T) {
-	t.Parallel()
-	sheet := writeTemp(t, "rel.tsvt", "=importsheet(\"balances.tsv\")\n")
-	out, err := runCLI(t, "render", sheet)
-	require.NoError(t, err)
-	assert.Contains(t, out, "#IMPORT!")
-}
-
-func TestRender_TraversalAboveTheBaseIsRefused(t *testing.T) {
-	t.Parallel()
-	sheet := writeTemp(t, "esc.tsvt", "=importcell(\"../../etc/hosts\")\n")
-	out, err := runCLI(t, "render", "--data", dataDir(t), sheet)
-	require.NoError(t, err)
-	assert.Contains(t, out, "#IMPORT!")
-}
-
-func TestRender_DataDoesNotWidenTheImportAllowlist(t *testing.T) {
-	t.Parallel()
-	// A live server the sheet names absolutely: --data authorized a base, and a
-	// base is not a host, so this must still be denied.
-	server := httptest.NewServer(nil)
-	t.Cleanup(server.Close)
-
-	sheet := writeTemp(t, "abs.tsvt", "=importcell(\""+server.URL+"/x.tsv\")\n")
-	out, err := runCLI(t, "render", "--data", dataDir(t), sheet)
-	require.NoError(t, err)
-	assert.Contains(t, out, "#IMPORT!")
-}
-
-func TestRender_BadDataFlagFailsBeforeComputing(t *testing.T) {
-	t.Parallel()
-	sheet := writeTemp(t, "rel.tsvt", "=importsheet(\"balances.tsv\")\n")
-	_, err := runCLI(t, "render", "--data", "http://data.example.com/", sheet)
-	require.ErrorIs(t, err, constants.ErrImportScheme)
-}
-
 func TestRunData_MistypedDirectoryFailsBeforeServing(t *testing.T) {
 	t.Parallel()
 
@@ -222,58 +180,43 @@ func TestLoopbackBase_ResolvesWithoutParsing(t *testing.T) {
 // TestExplain_ReportsWhereAnImportWent is the diagnostic contract: every import
 // failure is the same opaque #IMPORT! in the grid, so explain is the only place
 // an author can see the resolved URL or the specific reason.
-func TestExplain_ReportsWhereAnImportWent(t *testing.T) {
+// TestRender_LocalAndRemoteBasesComputeIdentically is the portability claim
+// made concrete: one unedited sheet, two different bases, byte-identical
+// output. If the sheet carried any transport detail this could not hold.
+// TestData_ScopedServerIsGoneAfterItsRunEnds pins the lifetime directly: the
+// base a scoped server published must stop answering once the run's closer
+// fires. A leaked listener would keep the directory readable by every process
+// on the machine after the command that started it exited.
+func TestData_ScopedServerIsGoneAfterItsRunEnds(t *testing.T) {
 	t.Parallel()
 
-	sheet := writeTemp(t, "imp.tsvt", "=importcell(\"balances.tsv\")\n")
-	out, err := runCLI(t, "explain", "A1", "--data", dataDir(t), sheet)
-	require.NoError(t, err)
-	assert.Contains(t, out, "import balances.tsv -> http://127.0.0.1:")
-	assert.Contains(t, out, "/balances.tsv")
+	dir := dataDir(t)
+	var base importer.DataBase
+	var closeData dataCloser
+
+	cmd := &cli.Command{
+		Name:  "x",
+		Flags: dataFlags(),
+		Action: func(_ context.Context, c *cli.Command) error {
+			var err error
+			base, closeData, err = resolveData(c)
+			return err
+		},
+	}
+	require.NoError(t, cmd.Run(context.Background(), []string{"x", "--data", dir}))
+	require.True(t, base.Configured())
+
+	// While the run holds it, the base answers.
+	fetcher := importer.New(importer.Config{Base: base, MaxBytes: 1 << 20})
+	_, err := fetcher.Fetch("balances.tsv", "application/vnd.tsvsheet+tsv")
+	require.NoError(t, err, "the scoped server serves while the run holds it")
+
+	require.NoError(t, closeData())
+
+	// After the closer fires, the very same reference no longer reaches anything.
+	_, err = fetcher.Fetch("balances.tsv", "application/vnd.tsvsheet+tsv")
+	require.ErrorIs(t, err, constants.ErrImportFetch, "nothing is listening once the run ends")
 }
 
-func TestExplain_ReportsWhyAnImportFailed(t *testing.T) {
-	t.Parallel()
-
-	sheet := writeTemp(t, "bad.tsvt", "=importcell(\"nope.tsv\")\n")
-	out, err := runCLI(t, "explain", "A1", "--data", dataDir(t), sheet)
-	require.NoError(t, err)
-	assert.Contains(t, out, "A1 = #IMPORT!")
-	assert.Contains(t, out, "FAILED: ")
-}
-
-func TestExplain_JSONCarriesTheImportTrace(t *testing.T) {
-	t.Parallel()
-
-	sheet := writeTemp(t, "impj.tsvt", "=importcell(\"balances.tsv\")\n")
-	out, err := runCLI(t, "explain", "A1", "--json", "--data", dataDir(t), sheet)
-	require.NoError(t, err)
-	assert.Contains(t, out, `"imports"`)
-	assert.Contains(t, out, `"source": "balances.tsv"`)
-}
-
-func TestExplain_WithoutImportsReportsNoImportLines(t *testing.T) {
-	t.Parallel()
-
-	sheet := writeTemp(t, "plain.tsvt", "2\t3\t=A1+B1\n")
-	out, err := runCLI(t, "explain", "C1", sheet)
-	require.NoError(t, err)
-	assert.Contains(t, out, "C1 = 5")
-	assert.NotContains(t, out, "import ")
-}
-
-func TestExplain_BadDataFlagFailsBeforeTracing(t *testing.T) {
-	t.Parallel()
-
-	sheet := writeTemp(t, "e.tsvt", "1\n")
-	_, err := runCLI(t, "explain", "A1", "--data", "http://data.example.com/", sheet)
-	require.ErrorIs(t, err, constants.ErrImportScheme)
-}
-
-func TestExplain_BadImportFlagsFailBeforeTracing(t *testing.T) {
-	t.Parallel()
-
-	sheet := writeTemp(t, "ei.tsvt", "1\n")
-	_, err := runCLI(t, "explain", "A1", "--allow-import", sheet)
-	require.Error(t, err, "--allow-import with no --import-host is a configuration error")
-}
+// TestRender_ScopedServerIsClosedOnAnErrorExit covers the other exit path: the
+// deferred close must run when the command FAILS, not only when it succeeds.

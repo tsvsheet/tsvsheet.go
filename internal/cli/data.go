@@ -8,7 +8,6 @@ import (
 	httpserver "github.com/gomatic/go-httpserver"
 	"github.com/urfave/cli/v3"
 
-	"github.com/tsvsheet/tsvsheet.go/internal/constants"
 	"github.com/tsvsheet/tsvsheet.go/internal/dataserve"
 	"github.com/tsvsheet/tsvsheet.go/internal/importer"
 )
@@ -125,19 +124,20 @@ Examples:
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			cfg.root = dataserve.Root(positional(c.Args().Slice()).text(0))
+			if cfg.root == "" {
+				return missingArgument(c)
+			}
 			return runData(ctx, cfg)
 		},
 	}
 }
 
 // runData publishes cfg.root over HTTP until ctx is cancelled (Ctrl-C). The
-// directory is required: there is no stdin equivalent for a directory, and
+// directory is required — there is no stdin equivalent for a directory, and
 // defaulting to the working directory would publish whatever happened to be
-// there.
+// there — and the command shows its help rather than calling here when it is
+// omitted.
 func runData(ctx context.Context, cfg dataConfig) error {
-	if cfg.root == "" {
-		return constants.ErrMissingArgument.With(nil, "argument", "dir")
-	}
 	handler, err := dataserve.Handler(cfg.root)
 	if err != nil {
 		return err

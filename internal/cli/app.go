@@ -166,14 +166,18 @@ func Run(ctx context.Context, version Version, args []string) int {
 }
 
 // exitCode maps a run error to a process exit code. A syntax error is exit 2,
-// diagnostics are exit 1 (already printed by check, so not re-logged), and any
-// other error is exit 1 and logged.
+// a usage mistake is exit 2 with its help already printed, diagnostics are
+// exit 1 (already printed by check), and any other error is exit 1 and logged.
+// Only the last two cases log: a mistake the user can see on screen does not
+// belong in the log stream a real failure shares.
 func exitCode(err error) int {
 	switch {
 	case err == nil:
 		return exitOK
 	case isSyntaxError(err):
 		slog.Error(name, "error", err)
+		return exitSyntaxError
+	case isUsage(err):
 		return exitSyntaxError
 	case isDiagnostics(err):
 		return exitError

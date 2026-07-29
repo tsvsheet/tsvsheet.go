@@ -27,7 +27,7 @@ type evalExpr string
 // wrapped as the sole cell of a one-cell sheet and computed, so it may use any
 // function or operator the engine supports; a reference to another cell has no
 // surrounding grid to resolve against and yields #REF!, which is correct.
-func runEval(streams Streams, arg evalArg, limits tsvsheet.Limits) error {
+func runEval(streams Streams, arg evalArg, limits tsvsheet.Limits, fetcher tsvsheet.Fetcher) error {
 	expr, err := resolveExpr(streams.In, arg)
 	if err != nil {
 		return err
@@ -36,7 +36,7 @@ func runEval(streams Streams, arg evalArg, limits tsvsheet.Limits) error {
 	if err != nil {
 		return err
 	}
-	grid := parsed.ComputeWith(tsvsheet.ComputeOptions{At: time.Now(), Limits: limits})
+	grid := parsed.ComputeWith(tsvsheet.ComputeOptions{At: time.Now(), Limits: limits, Fetcher: fetcher})
 	if _, err := fmt.Fprintln(streams.Out, grid[0][0]); err != nil {
 		return tsvsheet.ErrWriteFile.With(err)
 	}
@@ -65,17 +65,6 @@ func resolveExpr(in io.Reader, arg evalArg) (evalExpr, error) {
 	return evalExpr(expr), nil
 }
 
-// limitedAction adapts a positional-args + stream-injected function that needs
-// the --max-cells resource limits (but no import fetcher or sheet loader) to a
-// cli Action — the shape eval uses, since a bare expression has no cross-sheet
-// or import references.
-func limitedAction(fn func(Streams, positional, tsvsheet.Limits) error) cli.ActionFunc {
-	return func(_ context.Context, c *cli.Command) error {
-		streams := Streams{In: stdin, Out: c.Root().Writer, Err: stderr}
-		return fn(streams, positional(c.Args().Slice()), maxCellsLimits(c))
-	}
-}
-
 // evalCommand builds the `eval` command.
 func evalCommand() *cli.Command {
 	return &cli.Command{
@@ -87,13 +76,29 @@ expression is positional; omitted (or empty) reads it from stdin. A leading
 '=' is optional. There is no surrounding grid, so a reference to another cell
 (A2, B3) resolves to #REF! — eval is for self-contained expressions.
 
+IMPORT* works here as it does anywhere: an absolute URL needs --allow-import
+and an --import-host, and a relative reference resolves against --data.
+
 Examples:
   tsv eval '=1+2'          # 3
   tsv eval 'SUM(1,2,3)'    # 6
   tsv eval '1/0'           # #DIV/0!
-  echo '=2^10' | tsv eval  # 1024`,
-		Action: limitedAction(func(s Streams, args positional, limits tsvsheet.Limits) error {
-			return runEval(s, evalArg(args.text(0)), limits)
-		}),
+  echo '=2^10' | tsv eval  # 1024
+  tsv eval --data ./data '=importcell("rate.tsv")'`,
+		Flags: append(importFlags(), dataFlags()...),
+		Action: func(_ context.Context, c *cli.Command) error {
+			base, closeData, err := resolveData(c)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = closeData() }()
+			fetcher, _, err := resolveImport(c, base)
+			if err != nil {
+				return err
+			}
+			streams := Streams{In: stdin, Out: c.Root().Writer, Err: stderr}
+			return withUsageHelp(c,
+				runEval(streams, evalArg(positional(c.Args().Slice()).text(0)), maxCellsLimits(c), fetcher))
+		},
 	}
 }

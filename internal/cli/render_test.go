@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -128,4 +130,78 @@ func TestRunRender_ReadError(t *testing.T) {
 	err := runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
+}
+
+func TestRender_RelativeReferenceResolvesAgainstAScopedServer(t *testing.T) {
+	t.Parallel()
+	sheet := writeTemp(t, "rel.tsvt", "=importsheet(\"balances.tsv\")\n")
+	out, err := runCLI(t, "render", "--data", dataDir(t), sheet)
+	require.NoError(t, err)
+	assert.Contains(t, out, "Brokerage\t310000")
+}
+
+func TestRender_RelativeReferenceWithoutDataIsImportError(t *testing.T) {
+	t.Parallel()
+	sheet := writeTemp(t, "rel.tsvt", "=importsheet(\"balances.tsv\")\n")
+	out, err := runCLI(t, "render", sheet)
+	require.NoError(t, err)
+	assert.Contains(t, out, "#IMPORT!")
+}
+
+func TestRender_TraversalAboveTheBaseIsRefused(t *testing.T) {
+	t.Parallel()
+	sheet := writeTemp(t, "esc.tsvt", "=importcell(\"../../etc/hosts\")\n")
+	out, err := runCLI(t, "render", "--data", dataDir(t), sheet)
+	require.NoError(t, err)
+	assert.Contains(t, out, "#IMPORT!")
+}
+
+func TestRender_DataDoesNotWidenTheImportAllowlist(t *testing.T) {
+	t.Parallel()
+	// A live server the sheet names absolutely: --data authorized a base, and a
+	// base is not a host, so this must still be denied.
+	server := httptest.NewServer(nil)
+	t.Cleanup(server.Close)
+
+	sheet := writeTemp(t, "abs.tsvt", "=importcell(\""+server.URL+"/x.tsv\")\n")
+	out, err := runCLI(t, "render", "--data", dataDir(t), sheet)
+	require.NoError(t, err)
+	assert.Contains(t, out, "#IMPORT!")
+}
+
+func TestRender_BadDataFlagFailsBeforeComputing(t *testing.T) {
+	t.Parallel()
+	sheet := writeTemp(t, "rel.tsvt", "=importsheet(\"balances.tsv\")\n")
+	_, err := runCLI(t, "render", "--data", "http://data.example.com/", sheet)
+	require.ErrorIs(t, err, constants.ErrImportScheme)
+}
+
+func TestRender_LocalAndRemoteBasesComputeIdentically(t *testing.T) {
+	t.Parallel()
+
+	// A "remote" base — a server this test runs, reached by URL rather than by
+	// --data starting one. From the sheet's side the two are indistinguishable.
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/tab-separated-values")
+		_, _ = w.Write([]byte("Brokerage\t310000\n"))
+	}))
+	t.Cleanup(remote.Close)
+
+	sheet := writeTemp(t, "portable.tsvt", "=importsheet(\"balances.tsv\")\n")
+
+	fromDir, err := runCLI(t, "render", "--data", dataDir(t), sheet)
+	require.NoError(t, err)
+	fromURL, err := runCLI(t, "render", "--data", remote.URL+"/", sheet)
+	require.NoError(t, err)
+
+	assert.Equal(t, fromDir, fromURL, "the same sheet computes identically against either base")
+	assert.Contains(t, fromDir, "Brokerage\t310000")
+}
+
+func TestRender_ScopedServerIsClosedOnAnErrorExit(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeTemp(t, "err.tsvt", "=importsheet(\"balances.tsv\")\n")
+	_, err := runCLI(t, "render", "--data", dataDir(t), "--format", "bogus", sheet)
+	require.ErrorIs(t, err, constants.ErrUnknownFormat, "the command failed after the server was up")
 }

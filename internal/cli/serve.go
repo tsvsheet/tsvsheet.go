@@ -87,6 +87,9 @@ Examples:
 				return err
 			}
 			cfg.source = positional(c.Args().Slice()).at(0)
+			if cfg.source.isStdin() {
+				return missingArgument(c)
+			}
 			cfg.isUnconfined = pathAccess(isUnconfined)
 			cfg.limits = maxCellsLimits(c)
 			cfg.fetcher, cfg.cache = fetcher, cache

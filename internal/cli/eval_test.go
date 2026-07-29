@@ -39,7 +39,7 @@ func TestRunEval(t *testing.T) {
 			t.Parallel()
 
 			streams, out, _ := streamsWith(tc.in)
-			require.NoError(t, runEval(streams, evalArg(tc.arg), tsvsheet.DefaultLimits()))
+			require.NoError(t, runEval(streams, evalArg(tc.arg), tsvsheet.DefaultLimits(), nil))
 			assert.Equal(t, tc.want, out.String())
 		})
 	}
@@ -66,7 +66,7 @@ func TestRunEval_EmptyInput(t *testing.T) {
 			t.Parallel()
 
 			streams, _, _ := streamsWith(tc.in)
-			err := runEval(streams, evalArg(tc.arg), tsvsheet.DefaultLimits())
+			err := runEval(streams, evalArg(tc.arg), tsvsheet.DefaultLimits(), nil)
 			require.Error(t, err)
 			assert.ErrorIs(t, err, constants.ErrMissingArgument)
 		})
@@ -79,7 +79,7 @@ func TestRunEval_SyntaxError(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("")
-	err := runEval(streams, evalArg("1+"), tsvsheet.DefaultLimits())
+	err := runEval(streams, evalArg("1+"), tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrSyntax)
 }
@@ -94,7 +94,7 @@ func TestRunEval_MultiCellRejected(t *testing.T) {
 		t.Run(arg, func(t *testing.T) {
 			t.Parallel()
 			streams, _, _ := streamsWith("")
-			err := runEval(streams, evalArg(arg), tsvsheet.DefaultLimits())
+			err := runEval(streams, evalArg(arg), tsvsheet.DefaultLimits(), nil)
 			require.Error(t, err)
 			assert.ErrorIs(t, err, constants.ErrMultiCellExpression)
 		})
@@ -106,7 +106,7 @@ func TestRunEval_ReadError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runEval(streams, "", tsvsheet.DefaultLimits())
+	err := runEval(streams, "", tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
 }
@@ -117,7 +117,7 @@ func TestRunEval_WriteError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: strings.NewReader(""), Out: failWriter{}, Err: &bytes.Buffer{}}
-	err := runEval(streams, evalArg("1+2"), tsvsheet.DefaultLimits())
+	err := runEval(streams, evalArg("1+2"), tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrWriteFile)
 }
@@ -145,4 +145,40 @@ func TestCLI_EvalMaxCells(t *testing.T) {
 	out, err := runCLI(t, "--max-cells", "5", "eval", "=SEQUENCE(10)")
 	require.NoError(t, err)
 	assert.Contains(t, out, "#VALUE!") // 10 cells exceeds the 5-cell cap
+}
+
+// TestEval_ResolvesARelativeReferenceAgainstTheDataBase closes eval's gap with
+// the other computing commands: it computes with the same engine, so an IMPORT*
+// must work here too. Before this it always yielded #IMPORT! with no flag that
+// could enable it.
+func TestEval_ResolvesARelativeReferenceAgainstTheDataBase(t *testing.T) {
+	t.Parallel()
+
+	out, err := runCLI(t, "eval", "--data", dataDir(t), `=importcell("one.tsv")`)
+	require.NoError(t, err)
+	assert.Contains(t, out, "42")
+}
+
+// TestEval_WithoutADataBaseIsStillImportError pins that the door is opened by
+// the operator and not by the expression.
+func TestEval_WithoutADataBaseIsStillImportError(t *testing.T) {
+	t.Parallel()
+
+	out, err := runCLI(t, "eval", `=importcell("one.tsv")`)
+	require.NoError(t, err)
+	assert.Contains(t, out, "#IMPORT!")
+}
+
+func TestEval_BadDataFlagFailsBeforeComputing(t *testing.T) {
+	t.Parallel()
+
+	_, err := runCLI(t, cmdEval, "--data", "http://data.example.com/", "=1+1")
+	require.ErrorIs(t, err, constants.ErrImportScheme)
+}
+
+func TestEval_AllowImportWithoutAHostIsAConfigurationError(t *testing.T) {
+	t.Parallel()
+
+	_, err := runCLI(t, cmdEval, "--allow-import", "=1+1")
+	require.Error(t, err)
 }

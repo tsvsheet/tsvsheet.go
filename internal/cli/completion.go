@@ -42,12 +42,10 @@ func supportedShellList() string {
 
 // runCompletion writes the shell completion script for the requested shell to
 // the root command's writer, delegating the script generation to urfave/cli's
-// built-in per-shell templates. A missing shell is ErrMissingArgument (naming
-// the supported shells); an unrecognized shell is ErrUnsupportedShell.
+// built-in per-shell templates. An unrecognized shell is ErrUnsupportedShell;
+// an omitted one never reaches here, because the command answers that with its
+// own help.
 func runCompletion(ctx context.Context, root *cli.Command, shell shellName) error {
-	if shell == "" {
-		return constants.ErrMissingArgument.With(nil, "argument", "shell", "supported", supportedShellList())
-	}
 	renderer := completionRenderer(root, shell)
 	if renderer == nil {
 		return constants.ErrUnsupportedShell.With(nil, "shell", string(shell), "supported", supportedShellList())
@@ -82,7 +80,11 @@ Examples:
   source <(tsv completion zsh)                        # .zshrc
   tsv completion fish > ~/.config/fish/completions/tsv.fish`,
 		Action: func(ctx context.Context, c *cli.Command) error {
-			return runCompletion(ctx, c.Root(), shellName(c.Args().First()))
+			shell := shellName(c.Args().First())
+			if shell == "" {
+				return missingArgument(c)
+			}
+			return runCompletion(ctx, c.Root(), shell)
 		},
 	}
 }

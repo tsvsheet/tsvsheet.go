@@ -34,4 +34,5 @@ const (
 	ErrUnknownFormat       errs.Const = "unknown render format"
 	ErrUnsupported         errs.Const = "unsupported construct"
 	ErrUnsupportedShell    errs.Const = "unsupported shell"
+	ErrUsage               errs.Const = "usage"
 )

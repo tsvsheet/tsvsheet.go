@@ -38,10 +38,12 @@ func TestCLI_CompletionUnsupported(t *testing.T) {
 // TestCLI_CompletionMissingShell proves omitting the shell argument is the
 // ErrMissingArgument sentinel, whose diagnostic names the supported shells.
 func TestCLI_CompletionMissingShell(t *testing.T) {
-	_, err := runCLI(t, cmdComplete)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrMissingArgument)
-	assert.Contains(t, err.Error(), supportedShellList())
+	out, err := runCLI(t, cmdComplete)
+	require.ErrorIs(t, err, constants.ErrUsage)
+	// The help names the shells, which is what the old error text carried and
+	// what the reader actually needs in order to retry.
+	assert.Contains(t, out, "USAGE:")
+	assert.Contains(t, out, "bash")
 }
 
 // TestCompletionEnabledOnRoot proves the root command enables shell completion
@@ -82,4 +84,18 @@ func TestCompletionRenderer_EverySupportedShellResolves(t *testing.T) {
 	_, err := runCLI(t, cmdComplete, "csh")
 	require.Error(t, err, "an unsupported shell is refused rather than emitting nothing")
 	assert.Nil(t, completionRenderer(Command("test"), "csh"), "and resolves to no renderer")
+}
+
+// TestRunCompletion_NeverSeesAnOmittedShell pins the split of responsibility
+// the doc claims: the command answers an omitted shell with its own help, so
+// the runner only ever handles a shell that was actually named — supported or
+// not.
+func TestRunCompletion_NeverSeesAnOmittedShell(t *testing.T) {
+	out, err := runCLI(t, cmdComplete)
+	require.ErrorIs(t, err, constants.ErrUsage, "the command stopped it, not the runner")
+	assert.Contains(t, out, "USAGE:")
+
+	// A shell that WAS named still reaches the runner and is judged there.
+	_, err = runCLI(t, cmdComplete, "csh")
+	require.ErrorIs(t, err, constants.ErrUnsupportedShell)
 }

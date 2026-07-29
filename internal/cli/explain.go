@@ -136,6 +136,9 @@ Examples:
 			}
 			args := positional(c.Args().Slice())
 			cfg.cell = args.text(0)
+			if cfg.cell == "" {
+				return missingArgument(c)
+			}
 			cfg.source = args.at(1)
 			cfg.isUnconfined = pathAccess(isUnconfined)
 			cfg.limits = maxCellsLimits(c)
