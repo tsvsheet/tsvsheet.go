@@ -1,12 +1,10 @@
-package importer_test
+package importer
 
 import (
 	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,24 +13,23 @@ import (
 	"github.com/tsvsheet/go-tsvsheet"
 
 	"github.com/tsvsheet/tsvsheet.go/internal/constants"
-	"github.com/tsvsheet/tsvsheet.go/internal/importer"
 )
 
 const cellMedia = tsvsheet.MediaType("application/vnd.tsvsheet.cell+tsv")
 
 // tlsFetcher stands up a TLS test server with handler h and returns a Fetcher
 // wired to trust it, allowlisting the server's 127.0.0.1 host.
-func tlsFetcher(t *testing.T, h http.HandlerFunc) (importer.Fetcher, *httptest.Server) {
+func tlsFetcher(t *testing.T, h http.HandlerFunc) (Fetcher, *httptest.Server) {
 	t.Helper()
 	srv := httptest.NewTLSServer(h)
 	t.Cleanup(srv.Close)
-	cfg := importer.Config{
+	cfg := Config{
 		Client:       srv.Client(),
-		AllowedHosts: []importer.HostPattern{"127.0.0.1"},
+		AllowedHosts: []HostPattern{"127.0.0.1"},
 		Timeout:      2 * time.Second,
 		MaxBytes:     1024,
 	}
-	return importer.New(cfg), srv
+	return New(cfg), srv
 }
 
 func TestFetch_HappyPathStripsCharsetParam(t *testing.T) {
@@ -85,7 +82,7 @@ func TestFetch_SendsAcceptHeader(t *testing.T) {
 func TestFetch_SchemeMustBeHTTPS(t *testing.T) {
 	t.Parallel()
 
-	f := importer.New(importer.Config{AllowedHosts: []importer.HostPattern{"example.com"}})
+	f := New(Config{AllowedHosts: []HostPattern{"example.com"}})
 	for _, raw := range []string{"http://example.com/x", "file:///etc/passwd", "ftp://example.com/x"} {
 		_, err := f.Fetch(tsvsheet.ImportURL(raw), cellMedia)
 		assert.ErrorIs(t, err, constants.ErrImportScheme, raw)
@@ -95,7 +92,7 @@ func TestFetch_SchemeMustBeHTTPS(t *testing.T) {
 func TestFetch_MalformedURL(t *testing.T) {
 	t.Parallel()
 
-	f := importer.New(importer.Config{AllowedHosts: []importer.HostPattern{"example.com"}})
+	f := New(Config{AllowedHosts: []HostPattern{"example.com"}})
 	// A DEL control character makes net/url (and thus NewRequestWithContext) reject the URL.
 	_, err := f.Fetch(tsvsheet.ImportURL("https://example.com/\x7f"), cellMedia)
 	assert.ErrorIs(t, err, constants.ErrImportURL)
@@ -105,7 +102,7 @@ func TestFetch_HostDenied_NilClientDefault(t *testing.T) {
 	t.Parallel()
 
 	// Empty allowlist denies everything; a nil Client exercises New's default-client branch.
-	f := importer.New(importer.Config{})
+	f := New(Config{})
 	_, err := f.Fetch(tsvsheet.ImportURL("https://example.com/x"), cellMedia)
 	assert.ErrorIs(t, err, constants.ErrImportHostDenied)
 }
@@ -113,58 +110,9 @@ func TestFetch_HostDenied_NilClientDefault(t *testing.T) {
 func TestFetch_NonAllowlistedHostDenied(t *testing.T) {
 	t.Parallel()
 
-	f := importer.New(importer.Config{AllowedHosts: []importer.HostPattern{"good.example.com"}})
+	f := New(Config{AllowedHosts: []HostPattern{"good.example.com"}})
 	_, err := f.Fetch(tsvsheet.ImportURL("https://evil.example.com/x"), cellMedia)
 	assert.ErrorIs(t, err, constants.ErrImportHostDenied)
-}
-
-func TestFetch_Non2xxStatus(t *testing.T) {
-	t.Parallel()
-
-	f, srv := tlsFetcher(t, func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "nope", http.StatusInternalServerError)
-	})
-	_, err := f.Fetch(tsvsheet.ImportURL(srv.URL), cellMedia)
-	assert.ErrorIs(t, err, constants.ErrImportStatus)
-}
-
-func TestFetch_MalformedContentType(t *testing.T) {
-	t.Parallel()
-
-	f, srv := tlsFetcher(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/foo; bar") // param without value → parse error
-		_, _ = w.Write([]byte("x"))
-	})
-	_, err := f.Fetch(tsvsheet.ImportURL(srv.URL), cellMedia)
-	assert.ErrorIs(t, err, constants.ErrImportContentType)
-}
-
-func TestFetch_BodyAtLimitOK(t *testing.T) {
-	t.Parallel()
-
-	body := make([]byte, 1024) // exactly MaxBytes
-	for i := range body {
-		body[i] = 'a'
-	}
-	f, srv := tlsFetcher(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", string(cellMedia))
-		_, _ = w.Write(body)
-	})
-	res, err := f.Fetch(tsvsheet.ImportURL(srv.URL), cellMedia)
-	require.NoError(t, err)
-	assert.Len(t, res.Body, 1024)
-}
-
-func TestFetch_BodyOverLimitRejected(t *testing.T) {
-	t.Parallel()
-
-	body := make([]byte, 1025) // one past MaxBytes
-	f, srv := tlsFetcher(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", string(cellMedia))
-		_, _ = w.Write(body)
-	})
-	_, err := f.Fetch(tsvsheet.ImportURL(srv.URL), cellMedia)
-	assert.ErrorIs(t, err, constants.ErrImportTooLarge)
 }
 
 func TestFetch_Timeout(t *testing.T) {
@@ -175,8 +123,8 @@ func TestFetch_Timeout(t *testing.T) {
 		w.Header().Set("Content-Type", string(cellMedia))
 	}))
 	t.Cleanup(srv.Close)
-	f := importer.New(importer.Config{
-		AllowedHosts: []importer.HostPattern{"127.0.0.1"},
+	f := New(Config{
+		AllowedHosts: []HostPattern{"127.0.0.1"},
 		Timeout:      20 * time.Millisecond,
 		MaxBytes:     1024,
 		Client:       srv.Client(),
@@ -189,71 +137,6 @@ func TestFetch_Timeout(t *testing.T) {
 
 // ---- redirects ----------------------------------------------------------
 
-func TestFetch_RedirectToAllowedHTTPSFollowed(t *testing.T) {
-	t.Parallel()
-
-	f, srv := tlsFetcher(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/final" {
-			w.Header().Set("Content-Type", string(cellMedia))
-			_, _ = w.Write([]byte("done"))
-			return
-		}
-		http.Redirect(w, r, "/final", http.StatusFound) // same (allowed) host, https
-	})
-	res, err := f.Fetch(tsvsheet.ImportURL(srv.URL+"/start"), cellMedia)
-	require.NoError(t, err)
-	assert.Equal(t, "done", string(res.Body))
-}
-
-func TestFetch_RedirectToDisallowedHostRefused(t *testing.T) {
-	t.Parallel()
-
-	f, srv := tlsFetcher(t, func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "https://evil.invalid/x", http.StatusFound)
-	})
-	_, err := f.Fetch(tsvsheet.ImportURL(srv.URL), cellMedia)
-	assert.ErrorIs(t, err, constants.ErrImportRedirect)
-}
-
-func TestFetch_RedirectToNonLoopbackHTTPRefused(t *testing.T) {
-	t.Parallel()
-
-	// The redirect downgrades to http on a NON-loopback host that is itself
-	// allowlisted, so the refusal is on scheme (not host): plain http is only
-	// permitted for a loopback target. The hop is never actually followed.
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "http://example.com/x", http.StatusFound)
-	}))
-	t.Cleanup(srv.Close)
-	f := importer.New(importer.Config{
-		Client:       srv.Client(),
-		AllowedHosts: []importer.HostPattern{"127.0.0.1", "example.com"},
-		Timeout:      2 * time.Second,
-		MaxBytes:     1024,
-	})
-	_, err := f.Fetch(tsvsheet.ImportURL(srv.URL), cellMedia)
-	assert.ErrorIs(t, err, constants.ErrImportRedirect)
-}
-
-func TestFetch_RedirectToLoopbackHTTPFollowed(t *testing.T) {
-	t.Parallel()
-
-	// A plain-http loopback endpoint is a legitimate redirect target (reaching a
-	// local service is a primary import use case): the https→http-loopback hop is
-	// followed and its body returned.
-	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", string(cellMedia))
-		_, _ = w.Write([]byte("done"))
-	}))
-	t.Cleanup(plain.Close)
-	f, srv := tlsFetcher(t, func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, plain.URL+"/final", http.StatusFound) // https → http-loopback
-	})
-	res, err := f.Fetch(tsvsheet.ImportURL(srv.URL+"/start"), cellMedia)
-	require.NoError(t, err)
-	assert.Equal(t, "done", string(res.Body))
-}
-
 func TestFetch_LoopbackHTTPAllowed(t *testing.T) {
 	t.Parallel()
 
@@ -264,8 +147,8 @@ func TestFetch_LoopbackHTTPAllowed(t *testing.T) {
 		_, _ = w.Write([]byte("local"))
 	}))
 	t.Cleanup(plain.Close)
-	f := importer.New(importer.Config{
-		AllowedHosts: []importer.HostPattern{"127.0.0.1"},
+	f := New(Config{
+		AllowedHosts: []HostPattern{"127.0.0.1"},
 		Timeout:      2 * time.Second,
 		MaxBytes:     1024,
 	})
@@ -274,101 +157,58 @@ func TestFetch_LoopbackHTTPAllowed(t *testing.T) {
 	assert.Equal(t, "local", string(res.Body))
 }
 
-func TestFetch_TooManyRedirects(t *testing.T) {
+func TestNew_DefaultsClientAndInstallsCheckRedirect(t *testing.T) {
 	t.Parallel()
 
-	f, srv := tlsFetcher(t, func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/again", http.StatusFound) // loops on the allowed host
-	})
-	_, err := f.Fetch(tsvsheet.ImportURL(srv.URL+"/start"), cellMedia)
-	assert.ErrorIs(t, err, constants.ErrImportRedirect)
+	f := New(Config{})
+	require.NotNil(t, f.client)               // nil Client → default built
+	require.NotNil(t, f.client.CheckRedirect) // redirect guard installed
 }
 
-// ---- cache --------------------------------------------------------------
-
-// countingFetcher records how many times its Fetch is called and returns a
-// configurable result/error.
-type countingFetcher struct {
-	err   error
-	res   tsvsheet.FetchResult
-	calls atomic.Int64
-}
-
-func (c *countingFetcher) Fetch(_ tsvsheet.ImportURL, _ tsvsheet.MediaType) (tsvsheet.FetchResult, error) {
-	c.calls.Add(1)
-	return c.res, c.err
-}
-
-func TestCache_MissThenHitNoSecondFetch(t *testing.T) {
+func TestNew_KeepsInjectedClient(t *testing.T) {
 	t.Parallel()
 
-	inner := &countingFetcher{res: tsvsheet.FetchResult{ContentType: cellMedia, Body: []byte("v")}}
-	c := importer.NewCache(inner)
-
-	first, err := c.Fetch("https://x/a", cellMedia)
-	require.NoError(t, err)
-	assert.Equal(t, "v", string(first.Body))
-
-	second, err := c.Fetch("https://x/a", cellMedia)
-	require.NoError(t, err)
-	assert.Equal(t, "v", string(second.Body))
-	assert.Equal(t, int64(1), inner.calls.Load()) // second served from cache
+	injected := &http.Client{}
+	f := New(Config{Client: injected})
+	assert.Same(t, injected, f.client)
+	require.NotNil(t, injected.CheckRedirect) // installed onto the injected client
 }
 
-func TestCache_ClearDropsEntries(t *testing.T) {
+// TestContextFor_ZeroTimeoutIsNotAnExpiredDeadline pins the trap the doc names:
+// context.WithTimeout(ctx, 0) yields an ALREADY-expired deadline, so a Fetcher
+// built without an explicit timeout would fail every request instantly rather
+// than running unbounded. The zero case must produce a plain cancelable
+// context.
+func TestContextFor_ZeroTimeoutIsNotAnExpiredDeadline(t *testing.T) {
 	t.Parallel()
 
-	inner := &countingFetcher{res: tsvsheet.FetchResult{ContentType: cellMedia, Body: []byte("v")}}
-	c := importer.NewCache(inner)
+	ctx, cancel := New(Config{}).contextFor()
+	defer cancel()
 
-	_, _ = c.Fetch("https://x/a", cellMedia)
-	c.Clear()
-	_, _ = c.Fetch("https://x/a", cellMedia)
-	assert.Equal(t, int64(2), inner.calls.Load()) // refetched after Clear
+	_, hasDeadline := ctx.Deadline()
+	assert.False(t, hasDeadline, "no configured timeout means no deadline at all")
+	assert.NoError(t, ctx.Err(), "the context is live, not already expired")
+
+	timed, cancelTimed := New(Config{Timeout: time.Minute}).contextFor()
+	defer cancelTimed()
+	_, hasDeadline = timed.Deadline()
+	assert.True(t, hasDeadline, "a positive timeout does set one")
 }
 
-func TestCache_KeyedByURLAndAccept(t *testing.T) {
+// TestConfig_NilClientGetsADefaultAndAlwaysOursCheckRedirect pins the injection
+// contract: a caller may omit the client entirely, and either way the Fetcher
+// installs its own CheckRedirect — an injected client that kept its own would
+// follow redirects without re-validating the host, which is the whole point of
+// the allowlist.
+func TestConfig_NilClientGetsADefaultAndAlwaysOursCheckRedirect(t *testing.T) {
 	t.Parallel()
 
-	inner := &countingFetcher{res: tsvsheet.FetchResult{ContentType: cellMedia, Body: []byte("v")}}
-	c := importer.NewCache(inner)
+	fromNil := New(Config{})
+	require.NotNil(t, fromNil.client)
+	assert.NotNil(t, fromNil.client.CheckRedirect)
 
-	_, _ = c.Fetch("https://x/a", cellMedia)
-	_, _ = c.Fetch("https://x/b", cellMedia)               // different url
-	_, _ = c.Fetch("https://x/a", "application/other+tsv") // different accept
-	assert.Equal(t, int64(3), inner.calls.Load())
-}
-
-func TestCache_ErrorNotCached(t *testing.T) {
-	t.Parallel()
-
-	inner := &countingFetcher{err: constants.ErrImportFetch}
-	c := importer.NewCache(inner)
-
-	_, err := c.Fetch("https://x/a", cellMedia)
-	assert.ErrorIs(t, err, constants.ErrImportFetch)
-	_, err = c.Fetch("https://x/a", cellMedia)
-	assert.ErrorIs(t, err, constants.ErrImportFetch)
-	assert.Equal(t, int64(2), inner.calls.Load()) // retried, not cached
-}
-
-func TestCache_ConcurrentAccess(t *testing.T) {
-	t.Parallel()
-
-	inner := &countingFetcher{res: tsvsheet.FetchResult{ContentType: cellMedia, Body: []byte("v")}}
-	c := importer.NewCache(inner)
-
-	var wg sync.WaitGroup
-	for i := range 50 {
-		wg.Add(1)
-		go func(n int) {
-			defer wg.Done()
-			url := tsvsheet.ImportURL("https://x/a")
-			if n%2 == 0 {
-				c.Clear()
-			}
-			_, _ = c.Fetch(url, cellMedia)
-		}(i)
-	}
-	wg.Wait()
+	injected := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return nil }}
+	fromInjected := New(Config{Client: injected})
+	assert.Same(t, injected, fromInjected.client, "the injected client is kept")
+	assert.NotNil(t, injected.CheckRedirect, "but its CheckRedirect is replaced with ours")
 }

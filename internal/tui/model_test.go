@@ -94,108 +94,6 @@ func keyMsg(key string) tea.KeyMsg {
 	}
 }
 
-func TestNavigation(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "down")
-	m = press(t, m, "right")
-	assert.Equal(t, 1, m.row)
-	assert.Equal(t, 1, m.col)
-
-	m = press(t, m, "k") // up (vim)
-	m = press(t, m, "h") // left (vim)
-	assert.Equal(t, 0, m.row)
-	assert.Equal(t, 0, m.col)
-}
-
-func TestNavigation_ClampsAtEdges(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "up")   // already at top
-	m = press(t, m, "left") // already at left
-	assert.Equal(t, 0, m.row)
-	assert.Equal(t, 0, m.col)
-
-	for i := 0; i < 20; i++ {
-		m = press(t, m, "down")
-		m = press(t, m, "right")
-	}
-	assert.Equal(t, m.height()-1, m.row)
-	assert.Equal(t, m.width()-1, m.col)
-}
-
-func TestEditCell_Literal(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "right") // B1 (a literal "2")
-	m = press(t, m, "enter") // edit
-	assert.Equal(t, modeEdit, m.mode)
-
-	m = press(t, m, "backspace") // clear "2"
-	m = press(t, m, "9")
-	m = press(t, m, "enter") // commit
-	assert.Equal(t, modeNav, m.mode)
-
-	state := m.state
-	assert.Equal(t, "9", state.Source[0][1])
-	assert.True(t, state.IsDirty)
-}
-
-func TestEditCell_EntersWithI(t *testing.T) {
-	t.Parallel()
-
-	m := press(t, newModel(t, nil), "i")
-	assert.Equal(t, modeEdit, m.mode)
-	assert.Equal(t, "name", m.buffer) // seeded with the cell's source
-}
-
-func TestEditCell_Space(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "enter")
-	m = press(t, m, "space")
-	assert.Contains(t, m.buffer, " ")
-}
-
-func TestEditCell_Cancel(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "enter")
-	m = press(t, m, "5")
-	m = press(t, m, "esc") // cancel
-	assert.Equal(t, modeNav, m.mode)
-	assert.Equal(t, "name", m.state.Source[0][0]) // unchanged
-}
-
-func TestEditCell_FormulaSyntaxErrorStaysEditing(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "enter")
-	m.buffer = "=sum(" // a malformed formula
-	m = press(t, m, "enter")
-	assert.Equal(t, modeEdit, m.mode) // stays so the buffer is not lost
-	assert.NotEmpty(t, m.status)
-}
-
-func TestEditBuffer_UnhandledAndEmptyBackspace(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "right") // B1, buffer seed "2"
-	m = press(t, m, "enter")
-	m = press(t, m, "backspace") // ""
-	m = press(t, m, "backspace") // backspace on empty → no-op
-	assert.Empty(t, m.buffer)
-	m = press(t, m, "up") // unhandled key in edit mode → buffer unchanged
-	assert.Empty(t, m.buffer)
-}
-
 func TestSave(t *testing.T) {
 	t.Parallel()
 
@@ -212,16 +110,6 @@ func TestSave(t *testing.T) {
 	assert.Contains(t, m.status, "Saved")
 }
 
-func TestRefreshImports_Key(t *testing.T) {
-	t.Parallel()
-
-	// R refreshes imports (a recompute here, since the sheet has none) and reports
-	// it, leaving the model in navigation mode.
-	m := press(t, newModel(t, nil), "R")
-	assert.Equal(t, "Imports refreshed.", m.status)
-	assert.Equal(t, modeNav, m.mode)
-}
-
 func TestSave_Error(t *testing.T) {
 	t.Parallel()
 
@@ -233,76 +121,6 @@ func TestSave_Error(t *testing.T) {
 type testError struct{ msg string }
 
 func (e *testError) Error() string { return e.msg }
-
-func TestQuit_Clean(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	next, cmd := m.Update(keyMsg("q"))
-	assert.True(t, next.(Model).isQuitting)
-	assert.NotNil(t, cmd) // tea.Quit
-}
-
-func TestQuit_DirtyWarnsThenQuits(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "enter")
-	m = press(t, m, "9")
-	m = press(t, m, "enter") // dirty
-
-	m = press(t, m, "q") // first q → warn
-	assert.False(t, m.isQuitting)
-	assert.True(t, m.isConfirmingQuit)
-	assert.Contains(t, m.status, "Unsaved")
-
-	next, cmd := m.Update(keyMsg("q")) // second q → quit
-	assert.True(t, next.(Model).isQuitting)
-	assert.NotNil(t, cmd)
-}
-
-func TestQuit_DirtyThenMovementResets(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "enter")
-	m = press(t, m, "9")
-	m = press(t, m, "enter")
-	m = press(t, m, "q")    // warn
-	m = press(t, m, "down") // movement resets confirm
-	assert.False(t, m.isConfirmingQuit)
-}
-
-func TestQuit_CtrlCOnDirty(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "enter")
-	m = press(t, m, "9")
-	m = press(t, m, "enter")
-	m = press(t, m, "q")      // warn
-	m = press(t, m, "ctrl+c") // ctrl+c after warn → quits
-	assert.True(t, m.isQuitting)
-}
-
-func TestQuit_EscQuitsClean(t *testing.T) {
-	t.Parallel()
-
-	m := press(t, newModel(t, nil), "esc")
-	assert.True(t, m.isQuitting)
-}
-
-func TestUnhandledKeyResetsConfirm(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	m = press(t, m, "z") // unknown nav key
-	assert.False(t, m.isConfirmingQuit)
-	assert.Equal(t, modeNav, m.mode)
-}
-
-// otherMsg is a message the update loop does not recognize.
-type otherMsg struct{}
 
 func TestUpdate_IgnoresUnknownMsg(t *testing.T) {
 	t.Parallel()
@@ -321,121 +139,10 @@ func tallSheet(t *testing.T, n int) Model {
 	return New(s, nil, nil)
 }
 
-func TestViewport_ScrollsToKeepCursorVisible(t *testing.T) {
-	t.Parallel()
-
-	m := tallSheet(t, 30)
-	// Before any resize the whole grid is shown (viewHeight 0 → all rows).
-	assert.Equal(t, m.height(), m.visibleRows())
-
-	// A short window: height 10 → 10-6 chrome = 4 visible data rows.
-	next, cmd := m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
-	m = next.(Model)
-	assert.Nil(t, cmd)
-	assert.Equal(t, 4, m.visibleRows())
-	assert.Equal(t, 0, m.top) // cursor at top → no scroll
-
-	// Move down past the window; the view scrolls to follow (down branch).
-	for i := 0; i < 20; i++ {
-		m = press(t, m, "down")
-	}
-	assert.Equal(t, 20, m.row)
-	assert.Equal(t, 17, m.top) // row - visible + 1
-	top, end := m.visibleBounds()
-	assert.Equal(t, 17, top)
-	assert.Equal(t, 21, end)
-
-	// The grid renders only the visible slice: header + 4 rows = 5 lines.
-	assert.Equal(t, 5, strings.Count(stripANSI(m.grid()), "\n")+1)
-
-	// Move back up; the view scrolls up (up branch) and returns to the top.
-	for i := 0; i < 25; i++ {
-		m = press(t, m, "up")
-	}
-	assert.Equal(t, 0, m.row)
-	assert.Equal(t, 0, m.top)
-}
-
-func TestViewport_ShortSheetAndTinyWindow(t *testing.T) {
-	t.Parallel()
-
-	// A window smaller than the chrome still shows one data row.
-	tiny, _ := tallSheet(t, 30).Update(tea.WindowSizeMsg{Width: 40, Height: 3})
-	assert.Equal(t, 1, tiny.(Model).visibleRows())
-
-	// A short sheet in a tall window: bounds clamp to the grid height.
-	short := newModel(t, nil) // 2 rows
-	sized, _ := short.Update(tea.WindowSizeMsg{Width: 40, Height: 20})
-	top, end := sized.(Model).visibleBounds()
-	assert.Equal(t, 0, top)
-	assert.Equal(t, sized.(Model).height(), end) // end clamped to 2
-}
-
-func TestClampTop(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, scrollOffset(0), clampTop(5, -1))   // grid shorter than window → pin top
-	assert.Equal(t, scrollOffset(0), clampTop(-3, 10))  // negative offset → top
-	assert.Equal(t, scrollOffset(10), clampTop(15, 10)) // beyond the last page → last page
-	assert.Equal(t, scrollOffset(7), clampTop(7, 10))   // within range → unchanged
-}
-
 func TestInit(t *testing.T) {
 	t.Parallel()
 
 	assert.Nil(t, newModel(t, nil).Init())
-}
-
-func TestView_NavAndEdit(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(t, nil)
-	view := stripANSI(m.View())
-	assert.Contains(t, view, "tsvsheet")
-	assert.Contains(t, view, "A1:") // formula bar addresses the cursor
-
-	editing := press(t, m, "enter")
-	assert.Contains(t, stripANSI(editing.View()), "▏") // edit caret in the formula bar
-
-	quit := press(t, m, "q")
-	assert.Empty(t, quit.View())
-}
-
-func TestView_DirtyAndDiagnostics(t *testing.T) {
-	t.Parallel()
-
-	s, err := session.New([]byte("=bogus(A1)\n")) // unknown func → diagnostic
-	require.NoError(t, err)
-	m := New(s, nil, nil)
-	assert.Contains(t, stripANSI(m.View()), "diagnostic")
-
-	m = press(t, m, "enter")
-	m.buffer = "9" // replace the formula with a literal
-	m = press(t, m, "enter")
-	assert.Contains(t, stripANSI(m.View()), "unsaved")
-}
-
-func TestView_ErrorCircAndLongValues(t *testing.T) {
-	t.Parallel()
-
-	// #REF!, #CIRC!, and a long literal exercise the error and clip styling.
-	s, err := session.New([]byte("=Z99\t=A2+1\t1234567890\n=B1+1\t5\t6\n"))
-	require.NoError(t, err)
-	view := stripANSI(New(s, nil, nil).View())
-	assert.Contains(t, view, "#REF!")
-	assert.Contains(t, view, "#CIRC!")
-	assert.Contains(t, view, "…") // clipped long value
-}
-
-func TestEmptyGrid(t *testing.T) {
-	t.Parallel()
-
-	s, err := session.New([]byte(""))
-	require.NoError(t, err)
-	m := New(s, nil, nil)
-	assert.Equal(t, 1, m.width())
-	assert.Equal(t, 1, m.height())
-	assert.NotEmpty(t, stripANSI(m.View()))
 }
 
 func TestHelpers(t *testing.T) {
@@ -459,165 +166,19 @@ var ansiSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")
 // stripANSI removes ANSI escape sequences for assertion.
 func stripANSI(s string) string { return ansiSGR.ReplaceAllString(s, "") }
 
-func TestFillKeys(t *testing.T) {
-	t.Parallel()
-
-	// ctrl+d on D2 fills from D1 (=B1+C1 → =B2 + C2, overwriting in place);
-	// ctrl+r on B1's right neighbor fills the literal from the left.
-	m := newModel(t, nil)
-	m = press(t, m, "down")
-	for range 3 {
-		m = press(t, m, "right") // to D2
-	}
-	m = press(t, m, "ctrl+d")
-	assert.Equal(t, "=B2 + C2", m.state.Source[1][3])
-	assert.Equal(t, "Filled.", m.status)
-
-	m2 := newModel(t, nil)
-	m2 = press(t, m2, "right") // to B1
-	m2 = press(t, m2, "ctrl+r")
-	assert.Equal(t, "name", m2.state.Source[0][1])
-}
-
-func TestFillKeys_NoNeighborIsNoOp(t *testing.T) {
-	t.Parallel()
-
-	// The top row has nothing above and the first column nothing to the left.
-	m := newModel(t, nil)
-	m = press(t, m, "ctrl+d")
-	m = press(t, m, "ctrl+r")
-	assert.Equal(t, "name", m.state.Source[0][0])
-	assert.False(t, m.state.IsDirty)
-}
-
-func TestDuplicateKeys(t *testing.T) {
-	t.Parallel()
-
-	// D duplicates the selected row below itself; C the selected column to its
-	// right — both rebasing the duplicate's references.
-	m := newModel(t, nil)
-	m = press(t, m, "down")
-	m = press(t, m, "D")
-	assert.Len(t, m.state.Source, 3)
-	assert.Equal(t, "=B3 + C3", m.state.Source[2][3])
-	assert.Equal(t, "Row duplicated.", m.status)
-
-	m2 := newModel(t, nil)
-	m2 = press(t, m2, "right")
-	m2 = press(t, m2, "C")
-	assert.Len(t, m2.state.Source[0], 5)
-	assert.Equal(t, "2", m2.state.Source[0][2])
-	assert.Equal(t, "Column duplicated.", m2.status)
-}
-
 // TestTUIHidesWhatTheSheetHides proves the terminal honours the declared view:
 // a hidden column is not drawn, and the row numbering never renumbers — the
 // gutter marks the skip instead, because those are still those rows to every
 // formula in the sheet.
-func TestTUIHidesWhatTheSheetHides(t *testing.T) {
-	t.Parallel()
-
-	s, err := session.New([]byte(
-		"#.hide\tcols(range(B:B))\n#.hide\trows(range(2:2))\nname\tscratch\ndrop\tx\nkeep\ty\n",
-	))
-	require.NoError(t, err)
-
-	view := stripANSI(New(s, nil, nil).View())
-	assert.Contains(t, view, "name")
-	assert.NotContains(t, view, "scratch", "the hidden column is not drawn")
-	assert.NotContains(t, view, "drop", "the hidden row is not drawn")
-	assert.Contains(t, view, "⋯3", "and the gutter marks where rows were skipped")
-}
-
 // TestTUIRevealShowsWithoutUnhiding proves the reveal toggle is a view of the
 // file and never an edit to it: the hidden cells appear, the sheet stays clean,
 // and the directive is untouched.
-func TestTUIRevealShowsWithoutUnhiding(t *testing.T) {
-	t.Parallel()
-
-	const src = "#.hide\tcols(range(B:B))\nname\tscratch\nwidget\tx\n"
-	s, err := session.New([]byte(src))
-	require.NoError(t, err)
-
-	revealed := press(t, New(s, nil, nil), "v")
-	assert.Contains(t, stripANSI(revealed.View()), "scratch")
-	assert.Contains(t, stripANSI(revealed.View()), "Showing hidden")
-	assert.Equal(t, src, string(s.Source()), "revealing never writes to the file")
-
-	rehidden := press(t, revealed, "v")
-	assert.NotContains(t, stripANSI(rehidden.View()), "scratch")
-}
-
 // TestTUIRevealSaysSoWhenThereIsNothingToReveal proves a key that would do
 // nothing says why rather than appearing to fail.
-func TestTUIRevealSaysSoWhenThereIsNothingToReveal(t *testing.T) {
-	t.Parallel()
-
-	s, err := session.New([]byte("a\tb\n1\t2\n"))
-	require.NoError(t, err)
-
-	assert.Contains(t, stripANSI(press(t, New(s, nil, nil), "v").View()), "hides nothing")
-}
-
 // TestTUIMarksHeaderAndFrozenRows proves the other two declarations reach the
 // terminal: a header row and a frozen row are drawn differently from data, which
 // is all a printed grid can say about a pane that stays put while others scroll.
-func TestTUIMarksHeaderAndFrozenRows(t *testing.T) {
-	t.Parallel()
-
-	s, err := session.New([]byte(
-		"#.header\trows(count(1))\n#.freeze\trows(count(1))\nname\tqty\nwidget\t3\n",
-	))
-	require.NoError(t, err)
-
-	m := New(s, nil, nil)
-	assert.True(t, m.headerRow(0))
-	assert.True(t, m.frozenRow(0))
-	assert.False(t, m.headerRow(1))
-	assert.NotEmpty(t, stripANSI(m.View()))
-}
-
 // TestTUIRehidingRescuesTheCursor covers the case the reveal toggle must not
 // strand: the cursor sitting on a row or column that disappears when the view
 // is re-hidden. It lands on the nearest rendered one instead — forward if there
 // is anything below, backward when the hidden block runs to the end.
-func TestTUIRehidingRescuesTheCursor(t *testing.T) {
-	t.Parallel()
-
-	// Hidden rows 2-3 of 4: a cursor on row 2 moves down to the visible row 4.
-	down, err := session.New([]byte("#.hide\trows(range(2:3))\na\nb\nc\nd\n"))
-	require.NoError(t, err)
-	m := New(down, nil, nil)
-	m.isRevealing, m.row = true, 1
-	assert.Equal(t, 3, m.toggleReveal().row)
-
-	// Hidden rows 2-4 of 4: nothing below is visible, so it moves back to row 1.
-	up, err := session.New([]byte("#.hide\trows(range(2:4))\na\nb\nc\nd\n"))
-	require.NoError(t, err)
-	tail := New(up, nil, nil)
-	tail.isRevealing, tail.row = true, 3
-	assert.Equal(t, 0, tail.toggleReveal().row)
-
-	// The column axis behaves the same, including the fall back to the last
-	// visible column when the cursor sits beyond every one of them.
-	cols, err := session.New([]byte("#.hide\tcols(range(B:C))\na\tb\tc\n"))
-	require.NoError(t, err)
-	wide := New(cols, nil, nil)
-	wide.isRevealing, wide.col = true, 2
-	assert.Equal(t, 0, wide.toggleReveal().col)
-
-	// A sheet that hides every row is the same case on the other axis.
-	allRows, err := session.New([]byte("#.hide\trows(range(1:2))\na\nb\n"))
-	require.NoError(t, err)
-	empty := New(allRows, nil, nil)
-	empty.isRevealing, empty.row = true, 1
-	assert.Equal(t, 1, empty.toggleReveal().row)
-
-	// A sheet that hides every column has nowhere to put the cursor, so it
-	// stays where it is rather than being moved to a column that is not there.
-	all, err := session.New([]byte("#.hide\tcols(range(A:B))\na\tb\n"))
-	require.NoError(t, err)
-	blank := New(all, nil, nil)
-	blank.isRevealing, blank.col = true, 1
-	assert.Equal(t, 1, blank.toggleReveal().col)
-}

@@ -29,7 +29,7 @@ func tuiCommand() *cli.Command {
 	return &cli.Command{
 		Name:      cmdTUI,
 		Usage:     "Edit a spreadsheet in a terminal UI.",
-		ArgsUsage: "<sheet>",
+		ArgsUsage: argsUsageSheet,
 		Description: `Open the spreadsheet in a terminal grid: navigate cells, edit any cell (a
 value or an =formula), recompute, and save — the same capabilities as the
 browser editor, driven by the same engine. The sheet is a required positional

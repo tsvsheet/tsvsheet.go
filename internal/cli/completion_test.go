@@ -62,3 +62,24 @@ func TestSupportedShellList(t *testing.T) {
 
 	assert.Equal(t, "bash, zsh, fish", supportedShellList())
 }
+
+// TestCompletionRenderer_EverySupportedShellResolves pins the coupling the doc
+// names: the renderer comes from urfave's built-in completion command, added
+// under builtinCompletionName by EnableShellCompletion. If that wiring were
+// ever dropped, every supported shell would silently resolve to nil and emit
+// nothing — a completion script that is empty rather than absent.
+func TestCompletionRenderer_EverySupportedShellResolves(t *testing.T) {
+	t.Parallel()
+
+	// The built-in command is attached while the root runs, so the invariant is
+	// exercised through a real invocation rather than a bare construction.
+	for _, shell := range supportedShells {
+		out, err := runCLI(t, cmdComplete, string(shell))
+		require.NoError(t, err, string(shell))
+		assert.NotEmpty(t, out, "a supported shell emits a script, never an empty one")
+	}
+
+	_, err := runCLI(t, cmdComplete, "csh")
+	require.Error(t, err, "an unsupported shell is refused rather than emitting nothing")
+	assert.Nil(t, completionRenderer(Command("test"), "csh"), "and resolves to no renderer")
+}

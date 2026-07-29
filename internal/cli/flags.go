@@ -17,6 +17,10 @@ var stderr io.Writer = os.Stderr
 // jsonFlag names the explain command's --json option.
 const jsonFlag = "json"
 
+// argsUsageSheet is the positional form every command that computes a sheet
+// declares, so the three that spell it cannot drift apart in help output.
+const argsUsageSheet = "<sheet>"
+
 // positional is a command's positional arguments. Required inputs (the .tsvt
 // spreadsheet path, and the cell address for explain) are positional — never
 // flags — so invocations read as `tsv explain D2 sheet.tsvt`.

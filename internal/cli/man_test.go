@@ -121,3 +121,17 @@ func TestRunMan_WriteError(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrManPage)
 }
+
+// TestManSynopsis_AlwaysOffersTheSubcommandForm pins the "always" the doc
+// claims: whether or not the root takes its own arguments, the SYNOPSIS shows
+// the subcommand form, because that is how nearly every invocation is written.
+func TestManSynopsis_AlwaysOffersTheSubcommandForm(t *testing.T) {
+	t.Parallel()
+
+	withArgs := manSynopsis(&cli.Command{Name: "tsv", ArgsUsage: "<sheet>"})
+	assert.Contains(t, withArgs, "<sheet>", "the root's own form is shown when it has one")
+	assert.Contains(t, withArgs, "command", "and the subcommand form always follows")
+
+	bare := manSynopsis(&cli.Command{Name: "tsv"})
+	assert.Contains(t, bare, "command", "still shown when the root takes no arguments")
+}

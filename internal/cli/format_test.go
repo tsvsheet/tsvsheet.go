@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -123,4 +124,20 @@ func TestFormat_WriteErrors(t *testing.T) {
 			assert.ErrorIs(t, err, tsvsheet.ErrWriteFile)
 		})
 	}
+}
+
+// TestMarkdownRow_NewlineBecomesABreakNotANewRow pins the escape the doc names:
+// a cell can legitimately hold a newline (via CHAR(10)), and GFM has no way to
+// carry one inside a table cell. Emitting it raw would split one row into two
+// table lines and silently corrupt every column after it.
+func TestMarkdownRow_NewlineBecomesABreakNotANewRow(t *testing.T) {
+	t.Parallel()
+
+	got := markdownRow([]string{"one\ntwo", "b"})
+	assert.Equal(t, 1, strings.Count(got, "\n"), "one newline, and it terminates the row")
+	assert.True(t, strings.HasSuffix(got, "|\n"), "the only newline is the terminator")
+	assert.Contains(t, got, "one<br>two", "the in-cell newline survives as a break")
+
+	// A pipe would end the cell early, so it is escaped rather than emitted.
+	assert.Contains(t, markdownRow([]string{"a|b"}), `a\|b`)
 }

@@ -39,7 +39,7 @@ func serveCommand() *cli.Command {
 	return &cli.Command{
 		Name:      cmdServe,
 		Usage:     "Serve a browser spreadsheet editor.",
-		ArgsUsage: "<sheet>",
+		ArgsUsage: argsUsageSheet,
 		Description: `Host a local web spreadsheet backed by the tsvsheet engine: edit any cell
 (a value or an =formula) in the browser, recompute live, and save. The sheet
 is a required positional file path (serve saves edits back to it, so stdin is

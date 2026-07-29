@@ -131,3 +131,35 @@ func TestSaver_BareFilenameSavesInTheWorkingDirectory(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "1\t2\n", string(saved))
 }
+
+// TestWriteFileIn_StagesSoTheReplacementIsAtomic pins the "atomic" the save
+// path claims. The staging write goes to a separate name and only a rename
+// publishes it, so the sheet is never observed half-written: at every instant
+// the sheet's own path holds either the old bytes or the new ones, never a
+// truncated prefix of either.
+func TestWriteFileIn_StagesSoTheReplacementIsAtomic(t *testing.T) {
+	dir := t.TempDir()
+	sheet := filepath.Join(dir, "s.tsvt")
+	require.NoError(t, os.WriteFile(sheet, []byte("original\n"), 0o600))
+
+	// Observe what the sheet holds at the moment the staging write completes:
+	// still the original, because nothing has been renamed over it yet.
+	var atStagingTime string
+	prev := writeFileIn
+	writeFileIn = func(root *os.Root, name string, data []byte, perm os.FileMode) error {
+		err := prev(root, name, data, perm)
+		seen, readErr := os.ReadFile(sheet)
+		require.NoError(t, readErr)
+		atStagingTime = string(seen)
+		return err
+	}
+	t.Cleanup(func() { writeFileIn = prev })
+
+	require.NoError(t, saveAtomic(sheetDir(dir), "s.tsvt", []byte("replacement\n")))
+
+	assert.Equal(t, "original\n", atStagingTime, "the sheet is untouched until the rename")
+
+	after, err := os.ReadFile(sheet)
+	require.NoError(t, err)
+	assert.Equal(t, "replacement\n", string(after), "and fully replaced after it")
+}

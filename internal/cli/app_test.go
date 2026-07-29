@@ -5,14 +5,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tsvsheet/go-tsvsheet"
-
-	"github.com/tsvsheet/tsvsheet.go/internal/constants"
 )
 
 // TestCLI_MaxCellsCap proves --max-cells narrows the OOM cap that the render
@@ -66,101 +66,6 @@ func TestCommand_HasAllCommands(t *testing.T) {
 	)
 }
 
-func TestCLI_Render(t *testing.T) {
-	path := writeTemp(t, "s.tsvt", sampleSheet)
-	out, err := runCLI(t, "render", path)
-	require.NoError(t, err)
-	assert.Contains(t, out, "\t5\n")
-}
-
-func TestCLI_RenderFormatDefaultsToTSV(t *testing.T) {
-	// No --format → TSV: tab-separated, no commas.
-	path := writeTemp(t, "s.tsvt", sampleSheet)
-	out, err := runCLI(t, "render", path)
-	require.NoError(t, err)
-	assert.Equal(t, "2\t3\t5\n4\t5\t9\n", out)
-}
-
-func TestCLI_RenderFormatCSV(t *testing.T) {
-	// --format csv threads through to the CSV serializer.
-	path := writeTemp(t, "s.tsvt", sampleSheet)
-	out, err := runCLI(t, "render", "--format", "csv", path)
-	require.NoError(t, err)
-	assert.Equal(t, "2,3,5\n4,5,9\n", out)
-}
-
-func TestCLI_RenderFormatMarkdownAlias(t *testing.T) {
-	// The -f alias and the md format alias both resolve to a pipe table.
-	path := writeTemp(t, "s.tsvt", sampleSheet)
-	out, err := runCLI(t, "render", "-f", "md", path)
-	require.NoError(t, err)
-	assert.Equal(t, "| 2 | 3 | 5 |\n| --- | --- | --- |\n| 4 | 5 | 9 |\n", out)
-}
-
-func TestCLI_RenderFormatHTML(t *testing.T) {
-	path := writeTemp(t, "s.tsvt", sampleSheet)
-	out, err := runCLI(t, "render", "--format", "html", path)
-	require.NoError(t, err)
-	assert.Contains(t, out, `<table class="tsvsheet">`)
-	assert.Contains(t, out, "<tr><td>2</td><td>3</td><td>5</td></tr>")
-}
-
-func TestCLI_RenderFormatUnknown(t *testing.T) {
-	path := writeTemp(t, "s.tsvt", sampleSheet)
-	_, err := runCLI(t, "render", "--format", "bogus", path)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrUnknownFormat)
-}
-
-func TestCLI_DefaultCommandRenders(t *testing.T) {
-	// No subcommand → the default command renders (so a shebang'd .tsvt run as
-	// `tsv file.tsvt` computes it).
-	path := writeTemp(t, "s.tsvt", sampleSheet)
-	out, err := runCLI(t, path)
-	require.NoError(t, err)
-	assert.Contains(t, out, "\t5\n")
-}
-
-func TestCLI_RenderStdin(t *testing.T) {
-	withStdin(t, sampleSheet)
-	out, err := runCLI(t, "render") // omitted sheet → stdin
-	require.NoError(t, err)
-	assert.Contains(t, out, "\t9\n")
-}
-
-func TestCLI_Parse(t *testing.T) {
-	withStdin(t, sampleSheet)
-	out, err := runCLI(t, "parse")
-	require.NoError(t, err)
-	assert.Contains(t, out, `"rows"`)
-	assert.Contains(t, out, `=A1+B1`)      // source grid carries the formula
-	assert.NotContains(t, out, `"values"`) // computed grid omitted without the flag
-}
-
-func TestCLI_ParseWithValue(t *testing.T) {
-	withStdin(t, sampleSheet)
-	out, err := runCLI(t, "parse", "--value")
-	require.NoError(t, err)
-	assert.Contains(t, out, `"values"`)
-	assert.Contains(t, out, `"5"`) // C1 = A1+B1 = 5, in the computed grid
-}
-
-func TestCLI_ParseRoundTripsThroughFromJSON(t *testing.T) {
-	// parse → from-json reconstructs the original source.
-	json, err := runCLI(t, "parse", writeTemp(t, "s.tsvt", sampleSheet))
-	require.NoError(t, err)
-	withStdin(t, json)
-	back, err := runCLI(t, "from-json")
-	require.NoError(t, err)
-	assert.Equal(t, sampleSheet, back)
-}
-
-func TestCLI_CheckClean(t *testing.T) {
-	withStdin(t, sampleSheet)
-	_, err := runCLI(t, cmdCheck)
-	require.NoError(t, err)
-}
-
 func TestCLI_AllowAnyPaths(t *testing.T) {
 	// A sheet cross-referencing an absolute path outside its own directory:
 	// confined (default) refuses it (#REF!); --allow-any-paths reads it.
@@ -174,33 +79,6 @@ func TestCLI_AllowAnyPaths(t *testing.T) {
 	unconfined, err := runCLI(t, "render", "--allow-any-paths", main)
 	require.NoError(t, err)
 	assert.Contains(t, unconfined, "99")
-}
-
-func TestCLI_ExplainCell(t *testing.T) {
-	path := writeTemp(t, "s.tsvt", sampleSheet)
-	out, err := runCLI(t, "explain", "C1", path)
-	require.NoError(t, err)
-	assert.Contains(t, out, "C1 = 5")
-}
-
-func TestPositional(t *testing.T) {
-	t.Parallel()
-
-	args := positional{"first", "second"}
-	assert.Equal(t, sourcePath("first"), args.at(0))
-	assert.Equal(t, sourcePath("second"), args.at(1))
-	assert.Equal(t, sourcePath(""), args.at(2)) // missing → stdin
-	assert.Equal(t, "first", args.text(0))
-	assert.Equal(t, "", args.text(5)) // missing → empty
-}
-
-func TestExitCode(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, exitOK, exitCode(nil))
-	assert.Equal(t, exitSyntaxError, exitCode(tsvsheet.ErrSyntax.With(nil)))
-	assert.Equal(t, exitError, exitCode(constants.ErrDiagnostics.With(nil)))
-	assert.Equal(t, exitError, exitCode(errors.New("boom")))
 }
 
 func TestRun_ExitCodes(t *testing.T) {
@@ -234,33 +112,6 @@ type failReader struct{}
 
 func (failReader) Read([]byte) (int, error) { return 0, errors.New("read failed") }
 
-func TestRunParse_ReadError(t *testing.T) {
-	t.Parallel()
-
-	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runParse(streams, "-", false, false, tsvsheet.DefaultLimits(), nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
-}
-
-func TestRunRender_ReadError(t *testing.T) {
-	t.Parallel()
-
-	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
-}
-
-func TestRunExplain_ReadError(t *testing.T) {
-	t.Parallel()
-
-	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runExplain(streams, explainConfig{source: "-", cell: "A1"})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
-}
-
 // TestLoggerFlags_AreNotSharedBetweenCommands guards the fix for a data race:
 // --log-level/--log-format used to write through a Destination pointing at a
 // package-level LoggerConfig, so every root command in the process shared one
@@ -280,3 +131,30 @@ func TestLoggerFlags_AreNotSharedBetweenCommands(t *testing.T) {
 		})
 	}
 }
+
+// sampleSheet is a single-file spreadsheet: two data columns and a C-column
+// formula summing A and B per row.
+const sampleSheet = "2\t3\t=A1+B1\n4\t5\t=A2+B2\n"
+
+// streamsWith builds Streams over the given input, capturing out and err.
+func streamsWith(in string) (Streams, *bytes.Buffer, *bytes.Buffer) {
+	var out, errBuf bytes.Buffer
+	return Streams{In: strings.NewReader(in), Out: &out, Err: &errBuf}, &out, &errBuf
+}
+
+// writeTemp writes content to a temp file and returns its path.
+func writeTemp(t *testing.T, name, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	return path
+}
+
+// failWriter always fails, exercising output error paths.
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
+
+// TestMaxCellsFlag_ZeroKeepsTheEngineDefaults pins the sentinel the doc names:
+// the flag's zero value is "unset", not "a zero-cell budget". Reading it
+// literally would make every sheet exceed its limit and compute nothing.

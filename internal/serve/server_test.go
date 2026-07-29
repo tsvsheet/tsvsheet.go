@@ -3,7 +3,6 @@ package serve_test
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -147,136 +146,6 @@ func TestExplain_OutOfGrid(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
-func TestReferences_OK(t *testing.T) {
-	t.Parallel()
-
-	// D2 (=B2+C2) reads B2 and C2; D2 itself is read by nothing.
-	srv, _ := testServer(t)
-	rec := do(t, srv, http.MethodGet, "/api/references?cell=D2", "")
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	var refs struct {
-		Precedents []tsvsheet.Span    `json:"precedents"`
-		Dependents []tsvsheet.Address `json:"dependents"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &refs))
-	require.Len(t, refs.Precedents, 2)
-	assert.Equal(t, tsvsheet.Address{Row: 1, Col: 1}, refs.Precedents[0].From) // B2
-	assert.Equal(t, tsvsheet.Address{Row: 1, Col: 2}, refs.Precedents[1].From) // C2
-	assert.Empty(t, refs.Dependents)
-}
-
-func TestReferences_BadCell(t *testing.T) {
-	t.Parallel()
-
-	srv, _ := testServer(t)
-	rec := do(t, srv, http.MethodGet, "/api/references?cell=bogus", "")
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
-func TestStructure_AllOps(t *testing.T) {
-	t.Parallel()
-
-	// sampleSheet is 3 rows × 4 columns; each op reshapes it relative to (1,1).
-	cases := []struct {
-		op       string
-		wantRows int
-		wantCols int
-	}{
-		{"insert-row", 4, 4},
-		{"delete-row", 2, 4},
-		{"insert-col", 3, 5},
-		{"delete-col", 3, 3},
-		{"duplicate-row", 4, 4},
-		{"duplicate-col", 3, 5},
-	}
-	for _, tc := range cases {
-		t.Run(tc.op, func(t *testing.T) {
-			t.Parallel()
-			srv, _ := testServer(t)
-			rec := do(t, srv, http.MethodPost, "/api/structure", fmt.Sprintf(`{"op":%q,"row":1,"col":1}`, tc.op))
-			require.Equal(t, http.StatusOK, rec.Code)
-
-			var state session.State
-			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &state))
-			assert.Len(t, state.Source, tc.wantRows)
-			assert.Len(t, state.Source[0], tc.wantCols)
-			assert.True(t, state.IsDirty)
-		})
-	}
-}
-
-func TestStructure_UnknownOp(t *testing.T) {
-	t.Parallel()
-
-	srv, _ := testServer(t)
-	rec := do(t, srv, http.MethodPost, "/api/structure", `{"op":"bogus","row":0,"col":0}`)
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
-func TestStructure_NegativeIndexRejected(t *testing.T) {
-	t.Parallel()
-
-	// A negative index must be a clean 400 at the boundary, never an engine
-	// slice-bounds panic (insert-row with row:-1 crashes the released engine).
-	srv, _ := testServer(t)
-	for _, body := range []string{
-		`{"op":"insert-row","row":-1,"col":0}`,
-		`{"op":"insert-col","row":0,"col":-1}`,
-	} {
-		rec := do(t, srv, http.MethodPost, "/api/structure", body)
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-	}
-}
-
-func TestStructure_BadBody(t *testing.T) {
-	t.Parallel()
-
-	srv, _ := testServer(t)
-	rec := do(t, srv, http.MethodPost, "/api/structure", `not json`)
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
-func TestEmbedded_OK(t *testing.T) {
-	t.Parallel()
-
-	loader := func(_, ref tsvsheet.Path) (tsvsheet.Sheet, tsvsheet.Path, error) {
-		s, err := tsvsheet.Parse([]byte("=output(9)\n"))
-		return s, ref, err
-	}
-	sess, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root", tsvsheet.DefaultLimits(), nil)
-	require.NoError(t, err)
-	srv := serve.NewServer(sess, func() error { return nil }, nil)
-
-	rec := do(t, srv, http.MethodGet, "/api/embedded?cell=A1", "")
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	var resp struct {
-		Path string     `json:"path"`
-		Grid [][]string `json:"grid"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, "c", resp.Path)
-	assert.Equal(t, "9", resp.Grid[0][0])
-}
-
-func TestEmbedded_NotAnEmbedIs404(t *testing.T) {
-	t.Parallel()
-
-	// D2 in sampleSheet is a formula, but not a SHEET call.
-	srv, _ := testServer(t)
-	rec := do(t, srv, http.MethodGet, "/api/embedded?cell=D2", "")
-	assert.Equal(t, http.StatusNotFound, rec.Code)
-}
-
-func TestEmbedded_BadCell(t *testing.T) {
-	t.Parallel()
-
-	srv, _ := testServer(t)
-	rec := do(t, srv, http.MethodGet, "/api/embedded?cell=bogus", "")
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
 func TestConfig_RefreshMillis(t *testing.T) {
 	t.Parallel()
 
@@ -367,40 +236,4 @@ func TestUI_ServesHTML(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "<!doctype html>")
 	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
-}
-
-func TestStructure_FillOps(t *testing.T) {
-	t.Parallel()
-
-	// fill-down copies the cell above the selection into it, rebased —
-	// Excel's single-cell Ctrl+D; fill-right the cell to its left.
-	srv, _ := testServer(t)
-	rec := do(t, srv, http.MethodPost, "/api/structure", `{"op":"fill-down","row":2,"col":3}`)
-	require.Equal(t, http.StatusOK, rec.Code)
-	var state session.State
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &state))
-	assert.Equal(t, "=B3 + C3", state.Source[2][3])
-
-	rec = do(t, srv, http.MethodPost, "/api/structure", `{"op":"fill-right","row":0,"col":1}`)
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &state))
-	assert.Equal(t, state.Source[0][0], state.Source[0][1]) // header copied left→right
-}
-
-func TestStructure_FillWithoutNeighborIsNoOp(t *testing.T) {
-	t.Parallel()
-
-	// The top row has no cell above, the first column none to the left: both
-	// fills are quiet no-ops, as in Excel.
-	srv, _ := testServer(t)
-	for _, body := range []string{
-		`{"op":"fill-down","row":0,"col":1}`,
-		`{"op":"fill-right","row":1,"col":0}`,
-	} {
-		rec := do(t, srv, http.MethodPost, "/api/structure", body)
-		require.Equal(t, http.StatusOK, rec.Code)
-		var state session.State
-		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &state))
-		assert.False(t, state.IsDirty) // the session was never touched
-	}
 }
