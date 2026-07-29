@@ -518,7 +518,8 @@ func TestTUIHidesWhatTheSheetHides(t *testing.T) {
 	t.Parallel()
 
 	s, err := session.New([]byte(
-		"#.hide\tcols(range(B:B))\n#.hide\trows(range(2:2))\nname\tscratch\ndrop\tx\nkeep\ty\n"))
+		"#.hide\tcols(range(B:B))\n#.hide\trows(range(2:2))\nname\tscratch\ndrop\tx\nkeep\ty\n",
+	))
 	require.NoError(t, err)
 
 	view := stripANSI(New(s, nil, nil).View())
@@ -565,7 +566,8 @@ func TestTUIMarksHeaderAndFrozenRows(t *testing.T) {
 	t.Parallel()
 
 	s, err := session.New([]byte(
-		"#.header\trows(count(1))\n#.freeze\trows(count(1))\nname\tqty\nwidget\t3\n"))
+		"#.header\trows(count(1))\n#.freeze\trows(count(1))\nname\tqty\nwidget\t3\n",
+	))
 	require.NoError(t, err)
 
 	m := New(s, nil, nil)

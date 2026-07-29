@@ -427,7 +427,8 @@ func TestSessionShiftsDirectivesWithTheGrid(t *testing.T) {
 	t.Parallel()
 
 	s, err := session.New([]byte(
-		"#.header\trows(count(1))\n#.hide\tcols(range(C:C))\nname\tqty\tscratch\nwidget\t3\tx\n"))
+		"#.header\trows(count(1))\n#.hide\tcols(range(C:C))\nname\tqty\tscratch\nwidget\t3\tx\n",
+	))
 	require.NoError(t, err)
 
 	s.InsertRow(tsvsheet.Address{Row: 0, Col: 0})
@@ -442,7 +443,8 @@ func TestSessionStateCarriesTheView(t *testing.T) {
 	t.Parallel()
 
 	s, err := session.New([]byte(
-		"#.header\trows(count(1))\n#.freeze\trows(count(1), count(-1))\nname\tqty\nwidget\t3\ntotal\t3\n"))
+		"#.header\trows(count(1))\n#.freeze\trows(count(1), count(-1))\nname\tqty\nwidget\t3\ntotal\t3\n",
+	))
 	require.NoError(t, err)
 
 	state := s.Snapshot()
