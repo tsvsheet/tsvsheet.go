@@ -21,29 +21,37 @@ import (
 // os.WriteFile truncates first and would destroy the sheet if the process died
 // mid-write.
 func saver(sess *session.Session, source sourcePath) func() error {
-	dir, file := filepath.Split(filepath.Clean(string(source)))
+	rawDir, rawFile := filepath.Split(filepath.Clean(string(source)))
+	dir := sheetDir(rawDir)
 	if dir == "" {
 		dir = "."
 	}
-	return func() error { return saveAtomic(dir, file, sess.Source()) }
+	return func() error { return saveAtomic(dir, sheetName(rawFile), sess.Source()) }
 }
+
+// sheetDir is the directory a sheet lives in — the confinement root a save
+// writes through, so nothing outside it can be reached.
+type sheetDir string
+
+// sheetName is a sheet's base name within its sheetDir.
+type sheetName string
 
 // saveAtomic writes data as file inside dir, via a temporary file in that same
 // directory and a rename. Same-directory is required: a rename is only atomic
 // within one filesystem.
-func saveAtomic(dir, file string, data []byte) error {
-	root, err := os.OpenRoot(dir)
+func saveAtomic(dir sheetDir, file sheetName, data []byte) error {
+	root, err := os.OpenRoot(string(dir))
 	if err != nil {
-		return tsvsheet.ErrWriteFile.With(err, dir)
+		return tsvsheet.ErrWriteFile.With(err, string(dir))
 	}
 	defer func() { _ = root.Close() }()
-	tmp := file + tempSuffix
+	tmp := string(file) + tempSuffix
 	if err := writeFileIn(root, tmp, data, filePerm); err != nil {
 		return tsvsheet.ErrWriteFile.With(err, tmp)
 	}
-	if err := renameIn(root, tmp, file); err != nil {
+	if err := renameIn(root, tmp, string(file)); err != nil {
 		_ = root.Remove(tmp)
-		return tsvsheet.ErrWriteFile.With(err, file)
+		return tsvsheet.ErrWriteFile.With(err, string(file))
 	}
 	return nil
 }

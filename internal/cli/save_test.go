@@ -72,7 +72,7 @@ func TestSaver_SymlinkOutOfTheDirectoryIsRefused(t *testing.T) {
 func TestSaveAtomic_MissingDirectory(t *testing.T) {
 	t.Parallel()
 
-	err := saveAtomic(filepath.Join(t.TempDir(), "absent"), "s.tsvt", []byte("1\n"))
+	err := saveAtomic(sheetDir(filepath.Join(t.TempDir(), "absent")), "s.tsvt", []byte("1\n"))
 	require.ErrorIs(t, err, tsvsheet.ErrWriteFile)
 }
 
@@ -88,7 +88,7 @@ func TestSaveAtomic_WriteFailureLeavesTheSheetIntact(t *testing.T) {
 	writeFileIn = func(*os.Root, string, []byte, os.FileMode) error { return errors.New("disk full") }
 	t.Cleanup(func() { writeFileIn = prev })
 
-	err := saveAtomic(dir, "s.tsvt", []byte("replacement\n"))
+	err := saveAtomic(sheetDir(dir), "s.tsvt", []byte("replacement\n"))
 	require.ErrorIs(t, err, tsvsheet.ErrWriteFile)
 
 	kept, err := os.ReadFile(sheet)
@@ -105,7 +105,7 @@ func TestSaveAtomic_RenameFailureLeavesTheSheetIntactAndRemovesTheStagingFile(t 
 	renameIn = func(*os.Root, string, string) error { return errors.New("cross-device link") }
 	t.Cleanup(func() { renameIn = prev })
 
-	err := saveAtomic(dir, "s.tsvt", []byte("replacement\n"))
+	err := saveAtomic(sheetDir(dir), "s.tsvt", []byte("replacement\n"))
 	require.ErrorIs(t, err, tsvsheet.ErrWriteFile)
 
 	kept, err := os.ReadFile(sheet)
