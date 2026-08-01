@@ -60,7 +60,7 @@ func TestCommand_HasAllCommands(t *testing.T) {
 		t,
 		[]string{
 			cmdRender, cmdParse, cmdFromJSON, cmdCheck, cmdExplain,
-			cmdEval, cmdServe, cmdData, cmdTUI, cmdComplete, cmdMan,
+			cmdEval, cmdApply, cmdServe, cmdData, cmdTUI, cmdComplete, cmdMan,
 		},
 		names,
 	)

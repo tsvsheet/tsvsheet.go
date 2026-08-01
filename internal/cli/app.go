@@ -39,6 +39,7 @@ const (
 	cmdCheck    = "check"
 	cmdExplain  = "explain"
 	cmdEval     = "eval"
+	cmdApply    = "apply"
 	cmdData     = "data"
 	cmdServe    = "serve"
 	cmdTUI      = "tui"
@@ -91,6 +92,7 @@ func Command(v Version) *cli.Command {
 			checkCommand(),
 			explainCommand(),
 			evalCommand(),
+			applyCommand(),
 			serveCommand(),
 			dataCommand(),
 			tuiCommand(),

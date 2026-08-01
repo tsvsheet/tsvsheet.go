@@ -9,6 +9,7 @@ import errs "github.com/gomatic/go-error"
 
 // Keep these constants sorted alphabetically.
 const (
+	ErrApplyBothStdin      errs.Const = "sheet and edits cannot both be stdin"
 	ErrDataListen          errs.Const = "failed to bind the data server"
 	ErrDataRoot            errs.Const = "data directory cannot be published"
 	ErrDiagnostics         errs.Const = "sheet has diagnostics"
