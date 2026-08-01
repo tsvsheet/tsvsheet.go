@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -217,6 +218,58 @@ func TestRunApply_WriteFailureLeavesSheetIntact(t *testing.T) {
 	assert.Equal(t, "1\t2\n", string(saved))
 }
 
+// TestRunApply_PreservesTheSheetFileMode pins that an edit is an edit, not a
+// permission change: a world-readable sheet stays world-readable.
+func TestRunApply_PreservesTheSheetFileMode(t *testing.T) {
+	sheet := writeSheet(t, "1\t2\n")
+	require.NoError(t, os.Chmod(sheet, 0o644))
+	edits := writeEdits(t, "setCell\tB1\t9\n")
+	streams, _, _ := streamsWith("")
+	require.NoError(t, runApply(streams, sourcePath(sheet), sourcePath(edits), tsvsheet.DefaultLimits(), applyWrite))
+	info, err := os.Stat(sheet)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+}
+
+func TestRunApply_NewSheetIsPrivate(t *testing.T) {
+	// A sheet the save creates (no prior file) gets the private default.
+	dir := t.TempDir()
+	sheet := filepath.Join(dir, "fresh.tsvt")
+	require.NoError(t, saveAtomic(sheetDir(dir), "fresh.tsvt", []byte("1\n")))
+	info, err := os.Stat(sheet)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+}
+
+// TestSaveAtomic_ConcurrentSavesDoNotShareStaging pins the fix for the
+// fixed-staging-name race: two concurrent saves of one sheet must each publish
+// their own bytes, never one another's, and never report a failure for a write
+// that landed.
+func TestSaveAtomic_ConcurrentSavesDoNotShareStaging(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "race.tsvt"), []byte("0\n"), 0o600))
+	payloads := []string{strings.Repeat("a\n", 20000), strings.Repeat("b\n", 20000)}
+	var wg sync.WaitGroup
+	errs := make([]error, len(payloads))
+	for i, payload := range payloads {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = saveAtomic(sheetDir(dir), "race.tsvt", []byte(payload))
+		}()
+	}
+	wg.Wait()
+	for i, err := range errs {
+		require.NoError(t, err, "save %d reported a failure", i)
+	}
+	saved, err := os.ReadFile(filepath.Join(dir, "race.tsvt"))
+	require.NoError(t, err)
+	assert.Contains(t, payloads, string(saved), "the sheet holds one writer's bytes, whole")
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1, "no staging file survives")
+}
+
 func TestRunApply_BareFilenameSavesInCurrentDirectory(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "bare.tsvt"), []byte("1\t2\n"), 0o600))
@@ -247,6 +300,17 @@ func TestCLI_ApplyCheckFlag(t *testing.T) {
 	saved, readErr := os.ReadFile(sheet)
 	require.NoError(t, readErr)
 	assert.Equal(t, "1\t2\n", string(saved))
+}
+
+// TestCLI_ApplyStdinSheetThroughEndOfFlags pins the documented stdin-sheet
+// invocation end to end: a bare "-" swallows the positionals behind it, so the
+// form the help prints is the "--" form, and it must work.
+func TestCLI_ApplyStdinSheetThroughEndOfFlags(t *testing.T) {
+	edits := writeEdits(t, "setCell\tB1\t9\n")
+	withStdin(t, "1\t2\n")
+	out, err := runCLI(t, cmdApply, "--", "-", edits)
+	require.NoError(t, err)
+	assert.Equal(t, "1\t9\n", out)
 }
 
 func TestCLI_ApplyEditsOnStdin(t *testing.T) {

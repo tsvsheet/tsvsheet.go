@@ -129,13 +129,15 @@ batch and the sheet is untouched. The edits positional (omitted or "-") reads
 stdin; a "#.base <revision>" metadata line makes the batch conditional — it is
 refused when the sheet's content revision differs. A sheet of "-" reads stdin
 and writes the resulting document to stdout (revision to stderr) instead of
-writing a file. On success the sheet's new content revision (the lowercase-hex
-SHA-256 of its canonical bytes) is printed.
+writing a file; it must be written after "--", because a bare "-" otherwise
+consumes the arguments behind it. On success the sheet's new content revision
+(the lowercase-hex SHA-256 of its canonical bytes) is printed.
 
 Examples:
   tsv apply sheet.tsvt batch.edits
   printf 'setCell\tB7\t=sum(B1:B6)\n' | tsv apply sheet.tsvt
-  tsv apply --check sheet.tsvt batch.edits`,
+  tsv apply --check sheet.tsvt batch.edits
+  cat sheet.tsvt | tsv apply -- - batch.edits`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  flagApplyCheck,
