@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -134,4 +135,23 @@ func TestManSynopsis_AlwaysOffersTheSubcommandForm(t *testing.T) {
 
 	bare := manSynopsis(&cli.Command{Name: "tsv"})
 	assert.Contains(t, bare, "command", "still shown when the root takes no arguments")
+}
+
+// TestManPageCoversSubcommandFlags pins that a command group does not swallow
+// its subcommands' flags. `serve` carries none of its own, so rendering only
+// the top level would ship a man page documenting a server with no options —
+// and the release build writes this file into the archive.
+func TestManPageCoversSubcommandFlags(t *testing.T) {
+	t.Parallel()
+	// roff escapes every hyphen, so compare against the unescaped text a
+	// reader effectively sees rather than the wire form.
+	page := strings.ReplaceAll(manPage(Command("test")), `\-`, "-")
+	for _, heading := range []string{`.SS "sheet"`, `.SS "api"`} {
+		assert.Contains(t, page, heading, "each subcommand gets its own entry")
+	}
+	for _, flag := range []string{"allow-any-paths", "refresh-interval", "no-compute", "root"} {
+		assert.Contains(t, page, flag, "the flag %q a reader opens this page for", flag)
+	}
+	assert.Contains(t, page, "tsv serve sheet", "and the synopsis names the full command path")
+	assert.Contains(t, page, "tsv serve api", "")
 }

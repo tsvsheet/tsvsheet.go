@@ -32,7 +32,7 @@ type Addr string
 const LoopbackAny Addr = "127.0.0.1:0"
 
 // headerTimeout bounds how long a client may take to send its request headers,
-// so a stalled peer cannot pin a connection open indefinitely.
+// so a stalled peer does not pin a connection open indefinitely.
 const headerTimeout = 10 * time.Second
 
 // MediaType is the Content-Type a published file is served as — the value an
@@ -82,7 +82,7 @@ func (s Server) Base() string { return s.base }
 // Addr is the host:port the server actually bound.
 func (s Server) Addr() string { return s.listener.Addr().String() }
 
-// Close stops the server. A scoped run defers it, so the listener never
+// Close stops the server. A scoped run defers it, so the listener does not
 // outlives the command that started it — including on an error exit.
 func (s Server) Close() error {
 	if s.server == nil {
@@ -126,12 +126,12 @@ func checkRoot(root Root) error {
 }
 
 // serveFile writes the requested file. The path is cleaned and opened through
-// os.Root, so a traversal cannot escape root even though the importer already
+// os.Root, so a traversal is refused at the syscall even though the importer already
 // refuses one — the two checks are independent, and this one also holds for a
 // client that is not the importer.
 //
 // The open is non-blocking (openFlags). A blocking open of a FIFO waits for a
-// writer that may never come, which would pin the handler — and, for a scoped
+// writer that may not come, which would pin the handler — and, for a scoped
 // server, the command that started it — indefinitely. Opening first and judging
 // the mode afterwards also closes the race a stat-then-open would leave.
 func serveFile(w http.ResponseWriter, r *http.Request, root Root, media MediaType) {

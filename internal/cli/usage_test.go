@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,14 +19,16 @@ import (
 // which they already know, and would put a usage mistake into the log stream
 // that real failures share.
 func TestMissingArgument_ShowsHelpInsteadOfLoggingAnError(t *testing.T) {
-	for _, cmd := range []string{cmdData, cmdExplain, cmdComplete, cmdServe, cmdTUI} {
-		t.Run(cmd, func(t *testing.T) {
+	// serve's sheet editor is a subcommand, so its missing positional is
+	// reported one level down — the same way, with the same help.
+	for _, cmd := range [][]string{{cmdData}, {cmdExplain}, {cmdComplete}, {cmdTUI}, {cmdServe, cmdServeSheet}} {
+		t.Run(strings.Join(cmd, " "), func(t *testing.T) {
 			withStdin(t, "")
 
-			out, err := runCLI(t, cmd)
+			out, err := runCLI(t, cmd...)
 			require.ErrorIs(t, err, constants.ErrUsage, "a usage mistake, not a runtime failure")
 			assert.Contains(t, out, "USAGE:", "the command's own help is printed")
-			assert.Contains(t, out, cmd, "and it is the help for THIS command")
+			assert.Contains(t, out, cmd[len(cmd)-1], "and it is the help for THIS command")
 			assert.Equal(t, exitSyntaxError, exitCode(err), "exits non-zero")
 		})
 	}

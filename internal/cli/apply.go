@@ -102,7 +102,7 @@ func writeApplyResult(streams Streams, sheet sourcePath, out tsvsheet.Document, 
 	return nil
 }
 
-// saveSheetFile replaces the sheet file atomically (temp + rename), confined
+// saveSheetFile replaces the sheet file through the confined temp+rename saver,
 // to the sheet's own directory — the saver contract, for a one-shot write.
 func saveSheetFile(sheet sourcePath, data []byte) error {
 	rawDir, rawFile := filepath.Split(filepath.Clean(string(sheet)))

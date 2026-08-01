@@ -140,7 +140,7 @@ func TestServeCommand_Integration(t *testing.T) {
 	cancel()
 
 	cmd := serveCommand()
-	err := cmd.Run(ctx, []string{cmdServe, string(sheetFile(t)), "--port", "0"})
+	err := cmd.Run(ctx, []string{cmdServe, cmdServeSheet, string(sheetFile(t)), "--port", "0"})
 	require.NoError(t, err)
 }
 
@@ -202,7 +202,10 @@ func TestServeCommand_AllowImportRequiresHost(t *testing.T) {
 	t.Parallel()
 
 	cmd := serveCommand()
-	err := cmd.Run(context.Background(), []string{cmdServe, "--allow-import", string(sheetFile(t)), "--port", "0"})
+	err := cmd.Run(
+		context.Background(),
+		[]string{cmdServe, cmdServeSheet, "--allow-import", string(sheetFile(t)), "--port", "0"},
+	)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
 }
@@ -216,7 +219,16 @@ func TestServeCommand_AllowImportWithHost(t *testing.T) {
 	cmd := serveCommand()
 	err := cmd.Run(
 		ctx,
-		[]string{cmdServe, "--allow-import", "--import-host", "example.com", string(sheetFile(t)), "--port", "0"},
+		[]string{
+			cmdServe,
+			cmdServeSheet,
+			"--allow-import",
+			"--import-host",
+			"example.com",
+			string(sheetFile(t)),
+			"--port",
+			"0",
+		},
 	)
 	require.NoError(t, err)
 }

@@ -253,12 +253,25 @@ func manCommandsSection(root *cli.Command) string {
 	if len(cmds) == 0 {
 		return ""
 	}
-	chunks := make([]string, len(cmds)+1)
-	chunks[0] = ".SH COMMANDS\n"
-	for i, cmd := range cmds {
-		chunks[i+1] = manCommandEntry(binName(root.Name), cmd)
+	chunks := []string{".SH COMMANDS\n"}
+	for _, cmd := range cmds {
+		chunks = append(chunks, manEntries(binName(root.Name), cmd)...)
 	}
 	return strings.Join(chunks, "")
+}
+
+// manEntries renders a command and, when it is a group, each subcommand under
+// it. A group carries no flags of its own, so rendering only the top level
+// would silently drop every flag its subcommands define — which is what a
+// reader opens the man page for.
+func manEntries(bin binName, cmd *cli.Command) []string {
+	subs := cmd.VisibleCommands()
+	entries := make([]string, 0, 1+len(subs))
+	entries = append(entries, manCommandEntry(bin, cmd))
+	for _, sub := range subs {
+		entries = append(entries, manCommandEntry(binName(string(bin)+" "+cmd.Name), sub))
+	}
+	return entries
 }
 
 // manCommandEntry renders one subcommand: heading, synopsis line, usage

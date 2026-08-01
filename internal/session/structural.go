@@ -1,6 +1,6 @@
 // Package session's structural edits: the row and column operations that change
 // the grid's shape. Each goes through one seam so a directive-aware document
-// edit and the recompute that follows can never be forgotten.
+// edit and the recompute that follows stay together.
 package session
 
 import "github.com/tsvsheet/go-tsvsheet"
@@ -46,7 +46,7 @@ func (s *Session) DuplicateCol(at tsvsheet.Address) {
 }
 
 // structuralEdit applies a whole-grid transform (a row or column insert or
-// delete), recomputes, and marks the session dirty. Structural edits never
+// delete), recomputes, and marks the session dirty. Structural edits do not
 // fail: an out-of-range index is a no-op inside the engine.
 func (s *Session) structuralEdit(edit func(tsvsheet.Document) tsvsheet.Document) {
 	s.mu.Lock()

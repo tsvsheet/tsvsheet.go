@@ -1,13 +1,16 @@
-package serve_test
+package serve
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tsvsheet/go-tsvsheet"
 
 	"github.com/tsvsheet/tsvsheet.go/internal/session"
 )
@@ -109,4 +112,24 @@ func TestStructure_FillWithoutNeighborIsNoOp(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &state))
 		assert.False(t, state.IsDirty) // the session was never touched
 	}
+}
+
+// TestStructureSentinel pins the error a malformed structural request
+// produces — by driving the handler. Asserting that a sentinel is itself, as
+// an earlier version did, would pass even if this endpoint returned a
+// completely different error.
+func TestStructureSentinel(t *testing.T) {
+	t.Parallel()
+	rec := httptest.NewRecorder()
+	body := strings.NewReader(`{"op":"nope","index":0}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/structure", body)
+	testServerHandler(t).ServeHTTP(rec, req)
+	assert.Contains(t, rec.Body.String(), tsvsheet.ErrInvalidValue.Error())
+	assert.NotContains(t, rec.Body.String(), tsvsheet.ErrNotFound.Error())
+
+	srv, _ := testServer(t)
+	err := srv.structuralEdit(structureRequest{Op: "nope"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, tsvsheet.ErrInvalidValue)
+	assert.NotErrorIs(t, err, tsvsheet.ErrNotFound)
 }

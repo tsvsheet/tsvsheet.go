@@ -67,8 +67,8 @@ func (srv Server) Handler() http.Handler {
 // guardCSRF refuses cross-origin state-changing requests. serve is a local
 // single-user editor whose saves write host files, so it binds loopback by
 // default; but a page open in the operator's browser can still fire a "simple"
-// cross-origin POST at it (a CSRF write it cannot read back). A browser stamps
-// such a request Sec-Fetch-Site: cross-site|same-site, which script cannot
+// cross-origin POST at it (a CSRF write whose response it is denied). A browser stamps
+// such a request Sec-Fetch-Site: cross-site|same-site, which script is unable to
 // forge, so mutating requests carrying it are refused; safe methods (GET/HEAD)
 // and non-browser clients (no Sec-Fetch-Site, e.g. curl) pass through.
 func guardCSRF(next http.Handler) http.Handler {
@@ -112,7 +112,7 @@ func (srv Server) handleRecompute(w http.ResponseWriter, _ *http.Request) {
 
 // handleRefreshImports drops cached content-typed imports and recomputes,
 // returning the refreshed read model. It is the explicit "refresh imports"
-// action, distinct from POST /api/recompute (the clock refresh) — imports never
+// action, distinct from POST /api/recompute (the clock refresh) — imports do not
 // ride the auto-refresh ticker (ADR 0006 §6).
 func (srv Server) handleRefreshImports(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, srv.session.RefreshImports())
@@ -213,6 +213,18 @@ type embeddedResponse struct {
 	Grid tsvsheet.Grid `json:"grid"`
 }
 
+// embeddedAt is the embedded sub-sheet at a cell, or ErrNotFound when the cell
+// embeds nothing. It is a function rather than inline handler code so the
+// error a caller receives can be matched by identity in a test, not merely
+// recognised as a 404.
+func (srv Server) embeddedAt(at tsvsheet.Address) (embeddedResponse, error) {
+	path, grid, ok := srv.session.Embedded(at)
+	if !ok {
+		return embeddedResponse{}, tsvsheet.ErrNotFound.With(nil, "cell", at.String())
+	}
+	return embeddedResponse{Path: string(path), Grid: grid}, nil
+}
+
 // handleEmbedded returns the nested sub-sheet embedded by the cell named in the
 // `cell` query parameter, or 404 when that cell is not a resolvable SHEET call.
 func (srv Server) handleEmbedded(w http.ResponseWriter, r *http.Request) {
@@ -221,15 +233,15 @@ func (srv Server) handleEmbedded(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	path, grid, ok := srv.session.Embedded(at)
-	if !ok {
-		writeError(w, http.StatusNotFound, tsvsheet.ErrNotFound.With(nil, "cell", at.String()))
+	embedded, err := srv.embeddedAt(at)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, embeddedResponse{Path: string(path), Grid: grid})
+	writeJSON(w, http.StatusOK, embedded)
 }
 
-// maxRequestBytes bounds a request body so a large or slow upload cannot
+// maxRequestBytes bounds a request body so a large or slow upload does not
 // exhaust memory; a cell edit is tiny and even a full sheet load fits easily.
 const maxRequestBytes = 32 << 20 // 32 MiB
 
@@ -251,15 +263,3 @@ type errorResponse struct {
 
 // httpStatus is an HTTP response status code.
 type httpStatus int
-
-// writeError writes a JSON error envelope with the given status.
-func writeError(w http.ResponseWriter, status httpStatus, err error) {
-	writeJSON(w, status, errorResponse{Error: err.Error()})
-}
-
-// writeJSON encodes v as JSON with the given status.
-func writeJSON(w http.ResponseWriter, status httpStatus, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(int(status))
-	_ = json.NewEncoder(w).Encode(v)
-}

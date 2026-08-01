@@ -1,4 +1,4 @@
-package serve_test
+package serve
 
 import (
 	"encoding/json"
@@ -14,7 +14,6 @@ import (
 	"github.com/tsvsheet/go-tsvsheet"
 
 	"github.com/tsvsheet/tsvsheet.go/internal/refresh"
-	"github.com/tsvsheet/tsvsheet.go/internal/serve"
 	"github.com/tsvsheet/tsvsheet.go/internal/session"
 )
 
@@ -27,16 +26,16 @@ var sampleSheet = []byte(
 )
 
 // testServer builds a server over a fresh session and records whether save ran.
-func testServer(t *testing.T) (serve.Server, *bool) {
+func testServer(t *testing.T) (Server, *bool) {
 	t.Helper()
 	sess, err := session.New(sampleSheet)
 	require.NoError(t, err)
 	saved := false
-	return serve.NewServer(sess, func() error { saved = true; return nil }, nil), &saved
+	return NewServer(sess, func() error { saved = true; return nil }, nil), &saved
 }
 
 // do issues a request against a server's handler and returns the recorder.
-func do(t *testing.T, srv serve.Server, method, target, body string) *httptest.ResponseRecorder {
+func do(t *testing.T, srv Server, method, target, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -110,7 +109,7 @@ func TestSave_Error(t *testing.T) {
 
 	sess, err := session.New(sampleSheet)
 	require.NoError(t, err)
-	srv := serve.NewServer(sess, func() error { return errors.New("disk full") }, nil)
+	srv := NewServer(sess, func() error { return errors.New("disk full") }, nil)
 
 	rec := do(t, srv, http.MethodPost, "/api/save", "")
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
@@ -151,7 +150,7 @@ func TestConfig_RefreshMillis(t *testing.T) {
 
 	sess, err := session.New([]byte("=now()\n"))
 	require.NoError(t, err)
-	srv := serve.NewServer(sess, func() error { return nil }, refresh.Every(2*time.Second))
+	srv := NewServer(sess, func() error { return nil }, refresh.Every(2*time.Second))
 
 	rec := do(t, srv, http.MethodGet, "/api/config", "")
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -167,7 +166,7 @@ func TestConfig_NoRefresh(t *testing.T) {
 
 	sess, err := session.New(sampleSheet)
 	require.NoError(t, err)
-	zero := serve.NewServer(sess, func() error { return nil }, refresh.Every(0))
+	zero := NewServer(sess, func() error { return nil }, refresh.Every(0))
 	assert.Contains(t, do(t, zero, http.MethodGet, "/api/config", "").Body.String(), `"next_refresh_millis":0`)
 }
 

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -112,8 +113,12 @@ func TestSaveAtomic_RenameFailureLeavesTheSheetIntactAndRemovesTheStagingFile(t 
 	require.NoError(t, err)
 	assert.Equal(t, "original\n", string(kept), "a failed rename must not damage the sheet")
 
-	_, statErr := os.Stat(sheet + tempSuffix)
-	assert.True(t, os.IsNotExist(statErr), "the staging file is cleaned up on failure")
+	// The staging name carries a process and counter suffix, so asserting on
+	// `sheet + tempSuffix` would be checking a path this code never writes —
+	// trivially absent, and blind to a staging file that really survived.
+	leftovers, globErr := filepath.Glob(sheet + tempSuffix + "*")
+	require.NoError(t, globErr)
+	assert.Empty(t, leftovers, "no staging file survives a failed rename")
 }
 
 // TestSaver_BareFilenameSavesInTheWorkingDirectory covers the no-directory
@@ -162,4 +167,58 @@ func TestWriteFileIn_StagesSoTheReplacementIsAtomic(t *testing.T) {
 	after, err := os.ReadFile(sheet)
 	require.NoError(t, err)
 	assert.Equal(t, "replacement\n", string(after), "and fully replaced after it")
+}
+
+// brokenReader always fails, driving the edits read-error path.
+type brokenReader struct{}
+
+func (brokenReader) Read([]byte) (int, error) { return 0, errors.New("broken pipe") }
+
+func TestRunApply_EditsReadFailure(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeSheet(t, "1\t2\n")
+	streams := Streams{In: brokenReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
+	err := runApply(streams, sourcePath(sheet), "-", tsvsheet.DefaultLimits(), applyWrite)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
+}
+
+func TestRunApply_WriteFailureLeavesSheetIntact(t *testing.T) {
+	// Serial: swaps the process-global writeFileIn stub.
+	sheet := writeSheet(t, "1\t2\n")
+	edits := writeEdits(t, "setCell\tB1\t9\n")
+	prev := writeFileIn
+	writeFileIn = func(*os.Root, string, []byte, os.FileMode) error { return errors.New("disk full") }
+	t.Cleanup(func() { writeFileIn = prev })
+	streams, _, _ := streamsWith("")
+	err := runApply(streams, sourcePath(sheet), sourcePath(edits), tsvsheet.DefaultLimits(), applyWrite)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, tsvsheet.ErrWriteFile)
+	saved, readErr := os.ReadFile(sheet)
+	require.NoError(t, readErr)
+	assert.Equal(t, "1\t2\n", string(saved))
+}
+
+// TestRunApply_PreservesTheSheetFileMode pins that an edit is an edit, not a
+// permission change: a world-readable sheet stays world-readable.
+func TestRunApply_PreservesTheSheetFileMode(t *testing.T) {
+	sheet := writeSheet(t, "1\t2\n")
+	require.NoError(t, os.Chmod(sheet, 0o644))
+	edits := writeEdits(t, "setCell\tB1\t9\n")
+	streams, _, _ := streamsWith("")
+	require.NoError(t, runApply(streams, sourcePath(sheet), sourcePath(edits), tsvsheet.DefaultLimits(), applyWrite))
+	info, err := os.Stat(sheet)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+}
+
+func TestRunApply_NewSheetIsPrivate(t *testing.T) {
+	// A sheet the save creates (no prior file) gets the private default.
+	dir := t.TempDir()
+	sheet := filepath.Join(dir, "fresh.tsvt")
+	require.NoError(t, saveAtomic(sheetDir(dir), "fresh.tsvt", []byte("1\n")))
+	info, err := os.Stat(sheet)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }

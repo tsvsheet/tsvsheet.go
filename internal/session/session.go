@@ -62,7 +62,7 @@ func NewEmbeddable(
 
 // withDefaults resolves the injected limits, falling the zero value (an
 // unspecified Limits) back to the engine's generous DefaultLimits so a session
-// never enforces a degenerate zero grid dimension.
+// does not enforce a degenerate zero grid dimension.
 func withDefaults(limits tsvsheet.Limits) tsvsheet.Limits {
 	if limits == (tsvsheet.Limits{}) {
 		return tsvsheet.DefaultLimits()
@@ -138,7 +138,7 @@ func (s *Session) OnRefresh(clearFn func()) {
 // RefreshImports drops any cached content-typed imports (via the
 // frontend-injected clear) and recomputes, returning the refreshed read model.
 // It is the explicit "refresh imports" action and is deliberately separate from
-// the clock auto-refresh: imports never ride the isnow ticker (ADR 0006 §6). It
+// the clock auto-refresh: imports stay off the isnow ticker (ADR 0006 §6). It
 // is safe with no clear registered (a plain recompute) and when the sheet has no
 // imports. It does not affect the dirty flag.
 func (s *Session) RefreshImports() State {

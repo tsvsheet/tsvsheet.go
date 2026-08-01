@@ -40,11 +40,22 @@ func (srv Server) handleStructure(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
-	if !srv.applyStructure(req.Op, tsvsheet.Address{Row: req.Row, Col: req.Col}) {
-		writeError(w, http.StatusBadRequest, tsvsheet.ErrInvalidValue.With(nil, "op", string(req.Op)))
+	if err := srv.structuralEdit(req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, srv.session.Snapshot())
+}
+
+// structuralEdit applies one structural request, or reports ErrInvalidValue
+// for an operation this server does not implement. It is a function rather
+// than inline handler code so the error a caller receives can be matched by
+// identity in a test, not merely recognised as a 400.
+func (srv Server) structuralEdit(req structureRequest) error {
+	if !srv.applyStructure(req.Op, tsvsheet.Address{Row: req.Row, Col: req.Col}) {
+		return tsvsheet.ErrInvalidValue.With(nil, "op", string(req.Op))
+	}
+	return nil
 }
 
 // applyStructure dispatches a structural op to the session; the boolean reports

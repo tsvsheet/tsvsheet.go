@@ -159,7 +159,7 @@ func TestRunData_MistypedDirectoryFailsBeforeServing(t *testing.T) {
 func TestServe_BadDataFlagFailsBeforeBinding(t *testing.T) {
 	t.Parallel()
 	sheet := writeTemp(t, "s.tsvt", "1\n")
-	_, err := runCLI(t, "serve", "--data", "http://data.example.com/", sheet)
+	_, err := runCLI(t, "serve", "sheet", "--data", "http://data.example.com/", sheet)
 	require.ErrorIs(t, err, constants.ErrImportScheme)
 }
 

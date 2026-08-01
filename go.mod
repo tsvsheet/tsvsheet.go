@@ -1,6 +1,6 @@
 module github.com/tsvsheet/tsvsheet.go
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -11,6 +11,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/tsvsheet/go-isnow v0.1.7
 	github.com/tsvsheet/go-tsvsheet v0.25.1
+	github.com/tsvsheet/tsvsheet.api v0.2.1
 	github.com/urfave/cli/v3 v3.10.1
 )
 

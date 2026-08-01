@@ -33,18 +33,20 @@ const (
 
 // command names.
 const (
-	cmdRender   = "render"
-	cmdParse    = "parse"
-	cmdFromJSON = "from-json"
-	cmdCheck    = "check"
-	cmdExplain  = "explain"
-	cmdEval     = "eval"
-	cmdApply    = "apply"
-	cmdData     = "data"
-	cmdServe    = "serve"
-	cmdTUI      = "tui"
-	cmdComplete = "completion"
-	cmdMan      = "man"
+	cmdRender     = "render"
+	cmdParse      = "parse"
+	cmdFromJSON   = "from-json"
+	cmdCheck      = "check"
+	cmdExplain    = "explain"
+	cmdEval       = "eval"
+	cmdApply      = "apply"
+	cmdData       = "data"
+	cmdServe      = "serve"
+	cmdServeSheet = "sheet"
+	cmdServeAPI   = "api"
+	cmdTUI        = "tui"
+	cmdComplete   = "completion"
+	cmdMan        = "man"
 )
 
 // builtinCompletionName renames urfave/cli's auto-added (hidden) shell-completion

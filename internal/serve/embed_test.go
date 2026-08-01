@@ -1,4 +1,4 @@
-package serve_test
+package serve
 
 import (
 	"encoding/json"
@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tsvsheet/go-tsvsheet"
 
-	"github.com/tsvsheet/tsvsheet.go/internal/serve"
 	"github.com/tsvsheet/tsvsheet.go/internal/session"
 )
 
@@ -49,7 +48,7 @@ func TestEmbedded_OK(t *testing.T) {
 	}
 	sess, err := session.NewEmbeddable([]byte("=sheet(\"c\")\n"), loader, "root", tsvsheet.DefaultLimits(), nil)
 	require.NoError(t, err)
-	srv := serve.NewServer(sess, func() error { return nil }, nil)
+	srv := NewServer(sess, func() error { return nil }, nil)
 
 	rec := do(t, srv, http.MethodGet, "/api/embedded?cell=A1", "")
 	require.Equal(t, http.StatusOK, rec.Code)

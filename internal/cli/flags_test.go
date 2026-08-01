@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tsvsheet/go-tsvsheet"
+	"github.com/urfave/cli/v3"
 
 	"github.com/tsvsheet/tsvsheet.go/internal/constants"
 )
@@ -51,9 +52,10 @@ func TestArgsUsageSheet_EverySheetCommandDeclaresTheSameForm(t *testing.T) {
 	t.Parallel()
 
 	root := Command("test")
-	for _, name := range []string{cmdServe, cmdTUI} {
-		cmd := root.Command(name)
-		require.NotNil(t, cmd, name)
-		assert.Equal(t, argsUsageSheet, cmd.ArgsUsage, name)
+	// serve's sheet editor is a subcommand now, so the form it declares lives
+	// one level down; tui still takes the sheet directly.
+	for _, cmd := range []*cli.Command{root.Command(cmdServe).Command(cmdServeSheet), root.Command(cmdTUI)} {
+		require.NotNil(t, cmd)
+		assert.Equal(t, argsUsageSheet, cmd.ArgsUsage, cmd.Name)
 	}
 }
