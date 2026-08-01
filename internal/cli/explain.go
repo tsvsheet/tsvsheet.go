@@ -67,7 +67,19 @@ func writeTraceText(w io.Writer, trace tsvsheet.Trace) error {
 		_, _ = fmt.Fprintf(w, "  %s = %s\n", in.Ref, in.Value)
 	}
 	writeTraceImports(w, trace.Imports)
+	writeTraceNotes(w, trace.Notes)
 	return nil
+}
+
+// writeTraceNotes reports where this cell reads differently than the same text
+// would in a conventional spreadsheet. `check` names these at authoring time;
+// naming them here too means a reader who has not run check still learns why
+// the cell holds the value it holds, which is the whole point of announcing a
+// divergence rather than leaving it to be discovered from a surprising total.
+func writeTraceNotes(w io.Writer, notes []string) {
+	for _, note := range notes {
+		_, _ = fmt.Fprintf(w, "  note: %s\n", note)
+	}
 }
 
 // writeTraceImports reports where each IMPORT* in the formula went. Every import
@@ -111,6 +123,11 @@ An IMPORT* formula also reports where each import went — the URL it resolved
 to, or the specific reason it failed. Every import failure is the same opaque
 #IMPORT! in the grid, so this is the only place a denied host and a traversal
 above the data base look different.
+
+A cell whose formula reads differently here than the same text would in a
+conventional spreadsheet carries a "note:" line saying so — =-2^2 is -4 here and
+4 in Excel — so the difference is something you are told rather than something
+you find later in a wrong total. tsv check reports the same at authoring time.
 
 Examples:
   tsv explain D2 sheet.tsvt

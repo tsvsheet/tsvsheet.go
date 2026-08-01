@@ -156,3 +156,29 @@ func TestExplain_BadImportFlagsFailBeforeTracing(t *testing.T) {
 	_, err := runCLI(t, "explain", "A1", "--allow-import", sheet)
 	require.Error(t, err, "--allow-import with no --import-host is a configuration error")
 }
+
+func TestExplain_NotesWhereTheCellReadsDifferentlyThanInASpreadsheet(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeTemp(t, "div.tsvt", "=-2^2\n")
+	out, err := runCLI(t, "explain", "A1", sheet)
+	require.NoError(t, err)
+
+	// The value, and why it is that value rather than the 4 a spreadsheet user
+	// expects. check says this at authoring time; explain has to say it at read
+	// time too, or the lesson only reaches whoever ran the checker.
+	assert.Contains(t, out, "A1 = -4")
+	assert.Contains(t, out, "note: unary sign binds looser than ^")
+	assert.Contains(t, out, "Excel reads (-x)^y")
+}
+
+func TestExplain_AddsNoNoteToACellThatReadsAlike(t *testing.T) {
+	t.Parallel()
+
+	sheet := writeTemp(t, "plain.tsvt", "=(1+2)*3\n")
+	out, err := runCLI(t, "explain", "A1", sheet)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "A1 = 9")
+	assert.NotContains(t, out, "note:")
+}
