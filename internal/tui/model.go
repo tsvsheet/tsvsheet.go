@@ -179,13 +179,14 @@ func (m Model) refreshedNav() Model {
 
 // editBuffer applies a printable key or backspace to an edit buffer.
 func editBuffer(buffer editText, key tea.KeyMsg) editText {
-	if key.Type == tea.KeyBackspace {
+	switch key.Type {
+	case tea.KeyBackspace:
 		return trimLastRune(buffer)
-	}
-	if key.Type == tea.KeyRunes || key.Type == tea.KeySpace {
+	case tea.KeyRunes, tea.KeySpace:
 		return buffer + editText(key.Runes)
+	default:
+		return buffer
 	}
-	return buffer
 }
 
 // trimLastRune drops the last rune of s.

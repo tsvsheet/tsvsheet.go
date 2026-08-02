@@ -144,7 +144,7 @@ func TestCLI_EvalStdin(t *testing.T) {
 func TestCLI_EvalMaxCells(t *testing.T) {
 	out, err := runCLI(t, "--max-cells", "5", "eval", "=SEQUENCE(10)")
 	require.NoError(t, err)
-	assert.Contains(t, out, "#VALUE!") // 10 cells exceeds the 5-cell cap
+	assert.Contains(t, out, "#LIMIT!") // 10 cells exceeds the 5-cell cap: a budget refusal (§6)
 }
 
 // TestEval_ResolvesARelativeReferenceAgainstTheDataBase closes eval's gap with

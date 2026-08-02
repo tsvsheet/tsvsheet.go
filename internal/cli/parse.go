@@ -85,10 +85,16 @@ Examples:
 		Flags: append([]cli.Flag{
 			&cli.BoolFlag{
 				Name:        "value",
+				Sources:     cli.EnvVars("TSV_PARSE_VALUE"),
 				Usage:       "Include the computed grid as \"values\"",
 				Destination: &isValues,
 			},
-			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
+			&cli.BoolFlag{
+				Name:        flagAllowAnyPaths,
+				Sources:     cli.EnvVars("TSV_ALLOW_ANY_PATHS"),
+				Usage:       usageAllowAnyPaths,
+				Destination: &isUnconfined,
+			},
 		}, append(importFlags(), dataFlags()...)...),
 		Action: importedAction(
 			func(s Streams, args positional, limits tsvsheet.Limits, fetcher tsvsheet.Fetcher) error {

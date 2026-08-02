@@ -136,10 +136,16 @@ Examples:
 		Flags: append([]cli.Flag{
 			&cli.BoolFlag{
 				Name:        jsonFlag,
+				Sources:     cli.EnvVars("TSV_EXPLAIN_JSON"),
 				Usage:       "Emit the trace as JSON",
 				Destination: &cfg.isJSON,
 			},
-			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
+			&cli.BoolFlag{
+				Name:        flagAllowAnyPaths,
+				Sources:     cli.EnvVars("TSV_ALLOW_ANY_PATHS"),
+				Usage:       usageAllowAnyPaths,
+				Destination: &isUnconfined,
+			},
 		}, append(importFlags(), dataFlags()...)...),
 		Action: func(_ context.Context, c *cli.Command) error {
 			base, closeData, err := resolveData(c)

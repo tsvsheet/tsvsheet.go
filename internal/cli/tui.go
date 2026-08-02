@@ -38,9 +38,16 @@ file path.
 Examples:
   tsv tui sheet.tsvt`,
 		Flags: append([]cli.Flag{
-			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
+			&cli.BoolFlag{
+				Name:        flagAllowAnyPaths,
+				Sources:     cli.EnvVars("TSV_ALLOW_ANY_PATHS"),
+				Usage:       usageAllowAnyPaths,
+				Destination: &isUnconfined,
+			},
 			&cli.StringFlag{
 				Name:        flagRefreshInterval,
+				Sources:     cli.EnvVars("TSV_REFRESH_INTERVAL"),
+				Value:       "", // empty selects the documented auto default: 1s with clock functions, else off
 				Usage:       `Recompute the view: a duration (30s) or an isnow pattern ("M-F +[30mn]"); 0 disables. Default: 1s when the sheet has clock functions, else off`,
 				Destination: &cfg.refresh,
 			},

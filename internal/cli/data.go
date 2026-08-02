@@ -37,7 +37,12 @@ func noCloseData() error { return nil }
 // dataFlags returns the --data flag, appended beside importFlags() on every
 // command that computes a sheet.
 func dataFlags() []cli.Flag {
-	return []cli.Flag{&cli.StringFlag{Name: flagData, Usage: usageData}}
+	return []cli.Flag{&cli.StringFlag{
+		Name:    flagData,
+		Sources: cli.EnvVars("TSV_DATA"),
+		Value:   "", // empty means no data base; a scheme-carrying value names a server
+		Usage:   usageData,
+	}}
 }
 
 // resolveData builds the data base from --data. A value carrying a scheme names
@@ -118,6 +123,7 @@ Examples:
 				Name:        "port",
 				Aliases:     []string{"p"},
 				Sources:     cli.EnvVars("PORT"),
+				Value:       0, // the documented default: 0 asks the kernel for a free port
 				Usage:       "Port to listen on (0 asks the kernel for a free one)",
 				Destination: &cfg.port,
 			},
