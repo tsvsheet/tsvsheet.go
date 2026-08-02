@@ -37,8 +37,8 @@ const (
 // session and register neither.
 func importFlags() []cli.Flag {
 	return []cli.Flag{
-		&cli.BoolFlag{Name: flagAllowImport, Usage: usageAllowImport},
-		&cli.StringSliceFlag{Name: flagImportHost, Usage: usageImportHost},
+		&cli.BoolFlag{Name: flagAllowImport, Sources: cli.EnvVars("TSV_ALLOW_IMPORT"), Usage: usageAllowImport},
+		&cli.StringSliceFlag{Name: flagImportHost, Sources: cli.EnvVars("TSV_IMPORT_HOST"), Usage: usageImportHost},
 	}
 }
 

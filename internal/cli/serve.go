@@ -120,9 +120,16 @@ Examples:
 				Usage:       "Port to listen on",
 				Destination: &cfg.port,
 			},
-			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
+			&cli.BoolFlag{
+				Name:        flagAllowAnyPaths,
+				Sources:     cli.EnvVars("TSV_ALLOW_ANY_PATHS"),
+				Usage:       usageAllowAnyPaths,
+				Destination: &isUnconfined,
+			},
 			&cli.StringFlag{
 				Name:        flagRefreshInterval,
+				Sources:     cli.EnvVars("TSV_REFRESH_INTERVAL"),
+				Value:       "", // empty selects the documented auto default: 1s with clock functions, else off
 				Usage:       `Auto-recompute the browser view: a duration (30s) or an isnow pattern ("M-F +[30mn] >=9 <=17"); 0 disables. Default: 1s when the sheet has clock functions (TODAY/NOW/ISNOW), else off`,
 				Destination: &cfg.refresh,
 			},

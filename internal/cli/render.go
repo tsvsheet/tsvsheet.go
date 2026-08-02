@@ -93,17 +93,24 @@ Examples:
 			&cli.StringFlag{
 				Name:        flagFormat,
 				Aliases:     []string{"f"},
+				Sources:     cli.EnvVars("TSV_FORMAT"),
 				Value:       string(formatTSV),
 				Usage:       usageFormat,
 				Destination: &outputFormat,
 			},
 			&cli.StringFlag{
 				Name:        flagHidden,
+				Sources:     cli.EnvVars("TSV_HIDDEN"),
 				Value:       string(hiddenKeep),
 				Usage:       usageHidden,
 				Destination: &hidden,
 			},
-			&cli.BoolFlag{Name: flagAllowAnyPaths, Usage: usageAllowAnyPaths, Destination: &isUnconfined},
+			&cli.BoolFlag{
+				Name:        flagAllowAnyPaths,
+				Sources:     cli.EnvVars("TSV_ALLOW_ANY_PATHS"),
+				Usage:       usageAllowAnyPaths,
+				Destination: &isUnconfined,
+			},
 		}, append(importFlags(), dataFlags()...)...),
 		Action: importedAction(
 			func(s Streams, args positional, limits tsvsheet.Limits, fetcher tsvsheet.Fetcher) error {

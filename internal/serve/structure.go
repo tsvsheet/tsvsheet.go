@@ -88,8 +88,10 @@ func (srv Server) applyStructure(op structureOp, at tsvsheet.Address) bool {
 // column) has no source neighbor and is a no-op, as in Excel.
 func (srv Server) fillFromNeighbor(op structureOp, at tsvsheet.Address) {
 	from := tsvsheet.Address{Row: at.Row - 1, Col: at.Col}
-	if op == opFillRight {
+	switch op {
+	case opFillRight:
 		from = tsvsheet.Address{Row: at.Row, Col: at.Col - 1}
+	default:
 	}
 	if from.Row < 0 || from.Col < 0 {
 		return

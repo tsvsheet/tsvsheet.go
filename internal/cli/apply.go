@@ -140,8 +140,9 @@ Examples:
   cat sheet.tsvt | tsv apply -- - batch.edits`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
-				Name:  flagApplyCheck,
-				Usage: "dry-run: verify the base and fold, print the would-be revision, write nothing",
+				Name:    flagApplyCheck,
+				Sources: cli.EnvVars("TSV_APPLY_CHECK"),
+				Usage:   "dry-run: verify the base and fold, print the would-be revision, write nothing",
 			},
 		},
 		Action: func(_ context.Context, c *cli.Command) error {

@@ -120,19 +120,22 @@ func configureLogger(ctx context.Context, c *cli.Command) (context.Context, erro
 // untrusted sheet cannot exhaust memory. Zero (the default) keeps DefaultLimits.
 func maxCellsFlag() cli.Flag {
 	return &cli.IntFlag{
-		Name:  flagMaxCells,
-		Usage: "cap on the cells, grid dimension, and bytes a single formula result or grid may reach (0 = built-in default)",
-		Value: 0,
+		Name:    flagMaxCells,
+		Sources: cli.EnvVars("TSV_MAX_CELLS"),
+		Usage:   "cap on the cells, grid dimension, and bytes a single formula result or grid may reach (0 = built-in default)",
+		Value:   0,
 	}
 }
 
 // maxCellsLimits resolves the global --max-cells flag to resource limits: a
-// positive cap bounds the cells, grid dimension, and bytes any single formula
-// result or edit may reach; zero (the default) keeps the engine's generous
-// DefaultLimits.
+// positive cap is the single ceiling for every budget — the cells one written
+// reference may span (SpanCells), the cells and bytes one formula result may
+// reach, and the grid dimension an edit may grow to; zero (the default) keeps
+// the engine's generous DefaultLimits. An over-budget reference or result
+// computes to #LIMIT! (SPECIFICATION §6).
 func maxCellsLimits(c *cli.Command) tsvsheet.Limits {
 	if n := c.Root().Int(flagMaxCells); n > 0 {
-		return tsvsheet.Limits{ResultCells: n, GridDim: n, ResultBytes: n}
+		return tsvsheet.Limits{ResultCells: n, GridDim: n, ResultBytes: n, SpanCells: n}
 	}
 	return tsvsheet.DefaultLimits()
 }

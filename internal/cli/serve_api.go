@@ -51,11 +51,24 @@ Examples:
   tsv serve api --root ./sheets
   tsv serve api --root ./sheets --addr 127.0.0.1:9000 --no-compute`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagRoot, Usage: "directory of .tsvt documents to serve"},
-			&cli.StringFlag{Name: "addr", Usage: "loopback address to bind", Value: defaultAPIAddress},
+			&cli.StringFlag{
+				Name:    flagRoot,
+				Sources: cli.EnvVars("TSV_ROOT"),
+				// Deliberately no directory default: a missing --root is a
+				// usage mistake (help, exit 2), never an implicit cwd.
+				Value: "",
+				Usage: "directory of .tsvt documents to serve",
+			},
+			&cli.StringFlag{
+				Name:    "addr",
+				Sources: cli.EnvVars("TSV_ADDR"),
+				Usage:   "loopback address to bind",
+				Value:   defaultAPIAddress,
+			},
 			&cli.BoolFlag{
-				Name:  flagNoCompute,
-				Usage: "serve the document plane only: no computed reads, no computed events",
+				Name:    flagNoCompute,
+				Sources: cli.EnvVars("TSV_NO_COMPUTE"),
+				Usage:   "serve the document plane only: no computed reads, no computed events",
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {

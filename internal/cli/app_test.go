@@ -24,7 +24,7 @@ func TestCLI_MaxCellsCap(t *testing.T) {
 	path := writeTemp(t, "big.tsvt", "=sequence(10)\n")
 	out, err := runCLI(t, "--max-cells", "5", "render", path)
 	require.NoError(t, err)
-	assert.Contains(t, out, "#VALUE!") // 10 cells exceeds the 5-cell cap
+	assert.Contains(t, out, "#LIMIT!") // 10 cells exceeds the 5-cell cap: a budget refusal (§6)
 }
 
 // withStdin swaps the package stdin for the duration of a test.
