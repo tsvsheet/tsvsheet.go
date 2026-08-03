@@ -18,7 +18,7 @@ This repo is the **consumer**, not the engine: module `github.com/tsvsheet/tsvsh
 
 ## Any size, by policy
 
-A document loads through one bounded path ([R16](https://github.com/tsvsheet/.projects/blob/main/specs/tsvsheet/rules.md)): a census scan decides, in O(index) memory with no cell parsed, whether it fits `Limits.ResidentCells`. In budget, everything behaves exactly as it always did. Over budget, **every** load path refuses — naming the census, the budget, and the two remedies — except `tsv tui`, which pages it view-only. `--max-cells` raises the ceiling and makes any size editable; a budget says what this run will pay for, never what the language can do. When touching a load path, keep the refusal O(index) (census *before* buffering) and route it through `vetCensus` so there is one message, not five.
+A document loads through one bounded path ([R16](https://github.com/tsvsheet/.projects/blob/main/specs/tsvsheet/rules.md)): a census scan decides, in O(index) memory with no cell parsed, whether it fits `Limits.ResidentCells`. In budget, everything behaves exactly as it always did. Over budget, **every** load path refuses — naming the census, the budget, and the two remedies — except `tsv tui`, which pages it view-only. `--max-cells` raises the ceiling and makes any size editable; a budget says what this run will pay for, never what the language can do. When touching a load path, keep the refusal O(index) (census _before_ buffering) and route it through `vetCensus` so there is one message, not five.
 
 ## Non-negotiables
 
