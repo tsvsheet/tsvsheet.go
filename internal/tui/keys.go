@@ -21,7 +21,7 @@ func (m Model) move(key string) (Model, bool) {
 	switch key {
 	case "up", "k":
 		m.row, m.isConfirmingQuit = int(clampDown(cursorPos(m.row))), false
-	case "down", "j":
+	case keyDown, "j":
 		m.row, m.isConfirmingQuit = int(clampUp(cursorPos(m.row), cursorPos(m.height()-1))), false
 	case "left", "h":
 		m.col, m.isConfirmingQuit = int(clampDown(cursorPos(m.col))), false
@@ -53,7 +53,7 @@ func (m Model) command(key string) (Model, tea.Cmd) {
 		return m.toggleReveal(), nil
 	case "R":
 		return m.refreshImports(), nil
-	case "q", "ctrl+c", keyEsc:
+	case "q", keyCtrlC, keyEsc:
 		return m.quit()
 	default:
 		m.isConfirmingQuit = false

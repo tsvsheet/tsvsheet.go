@@ -76,6 +76,8 @@ const (
 const (
 	keyEnter = "enter"
 	keyEsc   = "esc"
+	keyCtrlC = "ctrl+c"
+	keyDown  = "down"
 )
 
 // editText is an in-progress cell edit buffer.
