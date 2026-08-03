@@ -31,6 +31,7 @@ const (
 	ErrMissingArgument     errs.Const = "missing required argument"
 	ErrMultiCellExpression errs.Const = "expression must be a single cell: it may not contain tab or newline characters"
 	ErrOpenFile            errs.Const = "failed to open file"
+	ErrOutsideGrid         errs.Const = "cell is outside the computed grid"
 	ErrServeAddress        errs.Const = "malformed serve address"
 	ErrServeExposed        errs.Const = "refusing a non-loopback bind"
 	ErrSourceChanged       errs.Const = "file changed on disk — reopen"

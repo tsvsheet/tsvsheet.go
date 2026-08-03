@@ -18,7 +18,7 @@ func TestRunRender_ComputesFromStdin(t *testing.T) {
 	t.Parallel()
 
 	streams, out, _ := streamsWith(sampleSheet)
-	require.NoError(t, runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil))
+	require.NoError(t, runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil, ""))
 	assert.Equal(t, "2\t3\t5\n4\t5\t9\n", out.String())
 }
 
@@ -29,7 +29,7 @@ func TestRunRender_ReadsFile(t *testing.T) {
 	streams, out, _ := streamsWith("")
 	require.NoError(
 		t,
-		runRender(streams, sourcePath(path), formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil),
+		runRender(streams, sourcePath(path), formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil, ""),
 	)
 	assert.Contains(t, out.String(), "\t5\n")
 }
@@ -38,7 +38,7 @@ func TestRunRender_FileMissing(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("")
-	err := runRender(streams, "/no/such.tsvt", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil)
+	err := runRender(streams, "/no/such.tsvt", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil, "")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }
@@ -47,7 +47,7 @@ func TestRunRender_SyntaxError(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("1\t=sum(\n")
-	err := runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil)
+	err := runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil, "")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrSyntax)
 }
@@ -56,7 +56,7 @@ func TestRunRender_WriteError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: strings.NewReader(sampleSheet), Out: failWriter{}, Err: &bytes.Buffer{}}
-	err := runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil)
+	err := runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil, "")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrWriteFile)
 }
@@ -127,7 +127,7 @@ func TestRunRender_ReadError(t *testing.T) {
 	t.Parallel()
 
 	streams := Streams{In: failReader{}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
-	err := runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil)
+	err := runRender(streams, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil, "")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
 }
@@ -204,4 +204,76 @@ func TestRender_ScopedServerIsClosedOnAnErrorExit(t *testing.T) {
 	sheet := writeTemp(t, "err.tsvt", "=importsheet(\"balances.tsv\")\n")
 	_, err := runCLI(t, "render", "--data", dataDir(t), "--format", "bogus", sheet)
 	require.ErrorIs(t, err, constants.ErrUnknownFormat, "the command failed after the server was up")
+}
+
+// TestRender_CellPrintsOneValueVerbatim pins the emitter-sheet escape hatch:
+// --cell prints exactly the computed text of one cell — embedded newlines
+// intact, no tabs, no escaping — where the grid path would silently turn that
+// same value into extra rows. This is the difference between a sheet that
+// computes an SVG and a sheet that can hand one to the next program.
+func TestRender_CellPrintsOneValueVerbatim(t *testing.T) {
+	t.Parallel()
+
+	// B1 computes a two-line value; through the grid it reads back as two rows.
+	path := writeTemp(t, "emit.tsvt", "x\t=concat(\"<svg>\", char(10), \"</svg>\")\n")
+
+	out := &bytes.Buffer{}
+	require.NoError(t, runRender(Streams{Out: out}, sourcePath(path), formatTSV, hiddenKeep,
+		false, tsvsheet.DefaultLimits(), nil, "B1"))
+	assert.Equal(t, "<svg>\n</svg>\n", out.String(), "the cell's own bytes, plus exactly one terminator")
+
+	grid := &bytes.Buffer{}
+	require.NoError(t, runRender(Streams{Out: grid}, sourcePath(path), formatTSV, hiddenKeep,
+		false, tsvsheet.DefaultLimits(), nil, ""))
+	assert.Equal(t, "x\t<svg>\n</svg>\n", grid.String(),
+		"without --cell the same value is tab-joined and its newline breaks the row — the reason --cell exists")
+}
+
+// TestRender_CellRefusesBadReferences pins the two ways a caller can name a
+// cell that is not there: a malformed address and one past the computed grid.
+// Both are usage errors with their own sentinel, never a silent empty line.
+func TestRender_CellRefusesBadReferences(t *testing.T) {
+	t.Parallel()
+
+	path := writeTemp(t, "small.tsvt", "1\t2\n")
+	for name, ref := range map[string]cellRef{"malformed": "nope!", "past the grid": "Z99"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			out := &bytes.Buffer{}
+			err := runRender(Streams{Out: out}, sourcePath(path), formatTSV, hiddenKeep,
+				false, tsvsheet.DefaultLimits(), nil, ref)
+			require.Error(t, err)
+			assert.Empty(t, out.String(), "a refused reference writes nothing at all")
+		})
+	}
+
+	out := &bytes.Buffer{}
+	err := runRender(Streams{Out: out}, sourcePath(path), formatTSV, hiddenKeep,
+		false, tsvsheet.DefaultLimits(), nil, "Z99")
+	assert.ErrorIs(t, err, constants.ErrOutsideGrid)
+}
+
+// TestRender_CellIgnoresHiddenAndFormat pins the precedence: --cell answers
+// with one value, so neither --format nor a sheet's hide directives may
+// reshape or suppress it.
+func TestRender_CellIgnoresHiddenAndFormat(t *testing.T) {
+	t.Parallel()
+
+	path := writeTemp(t, "hidden.tsvt", "#.hide\trows(range(1:1))\nsecret\tb\n")
+	out := &bytes.Buffer{}
+	require.NoError(t, runRender(Streams{Out: out}, sourcePath(path), formatCSV, hiddenDrop,
+		false, tsvsheet.DefaultLimits(), nil, "A1"))
+	assert.Equal(t, "secret\n", out.String(), "the named cell answers even where the viewport hides it")
+}
+
+// TestRender_CellReportsAWriteFailure pins the last leg: a stdout that fails
+// mid-write surfaces as ErrWriteFile rather than a silent success, so a
+// truncated `> chart.svg` is reported instead of shipped.
+func TestRender_CellReportsAWriteFailure(t *testing.T) {
+	t.Parallel()
+
+	path := writeTemp(t, "one.tsvt", "value\n")
+	err := runRender(Streams{Out: failWriter{}}, sourcePath(path), formatTSV, hiddenKeep,
+		false, tsvsheet.DefaultLimits(), nil, "A1")
+	assert.ErrorIs(t, err, tsvsheet.ErrWriteFile)
 }
