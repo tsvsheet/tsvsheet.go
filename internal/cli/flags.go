@@ -1,11 +1,8 @@
 package cli
 
 import (
-	"context"
 	"io"
 	"os"
-
-	"github.com/urfave/cli/v3"
 )
 
 // stdin is indirected so tests can substitute an input stream.
@@ -41,14 +38,4 @@ func (p positional) text(i int) string {
 		return p[i]
 	}
 	return ""
-}
-
-// streamAction adapts a positional-args + stream-injected function to a cli
-// Action, wiring stdout from the command writer and stderr from the indirected
-// stream, and the positional arguments from the parsed command line.
-func streamAction(fn func(Streams, positional) error) cli.ActionFunc {
-	return func(_ context.Context, c *cli.Command) error {
-		streams := Streams{In: stdin, Out: c.Root().Writer, Err: stderr}
-		return fn(streams, positional(c.Args().Slice()))
-	}
 }

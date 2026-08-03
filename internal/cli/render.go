@@ -29,7 +29,7 @@ func runRender(
 	}
 	defer func() { _ = release() }()
 
-	doc, err := parseDocument(reader)
+	doc, err := parseDocument(reader, limits)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func computeOptions(
 	path := filepath.Clean(string(source))
 	return tsvsheet.ComputeOptions{
 		At:      time.Now(),
-		Loader:  sheetLoader(loader.Dir(filepath.Dir(path)), isUnconfined),
+		Loader:  sheetLoader(loader.Dir(filepath.Dir(path)), isUnconfined, limits),
 		Base:    tsvsheet.Path(filepath.Base(path)),
 		Limits:  limits,
 		Fetcher: fetcher,

@@ -5,13 +5,13 @@ go 1.26.5
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/gomatic/go-error v0.3.10
+	github.com/gomatic/go-error v0.3.13
 	github.com/gomatic/go-httpserver v0.2.0
 	github.com/gomatic/go-log v0.3.10
 	github.com/stretchr/testify v1.11.1
 	github.com/tsvsheet/go-isnow v0.1.7
-	github.com/tsvsheet/go-tsvsheet v0.27.3
-	github.com/tsvsheet/tsvsheet.api v0.2.1
+	github.com/tsvsheet/go-tsvsheet v0.27.5
+	github.com/tsvsheet/tsvsheet.api v0.2.6
 	github.com/urfave/cli/v3 v3.10.1
 )
 

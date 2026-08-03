@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path/filepath"
@@ -102,10 +103,13 @@ func loadEditable(
 	if err != nil {
 		return nil, nil, constants.ErrOpenFile.With(err)
 	}
+	if vetErr := vetCensus(tsvsheet.ByteSource{ReadAt: bytes.NewReader(src), Size: int64(len(src))}, limits); vetErr != nil {
+		return nil, nil, vetErr
+	}
 	// Resolve SHEET(...) and "file"! references within the spreadsheet's own
 	// directory (or any path with isUnconfined), with this file as the base;
 	// content-typed IMPORT* cells fetch through the injected fetcher (nil off).
-	load := sheetLoader(loader.Dir(filepath.Dir(path)), isUnconfined)
+	load := sheetLoader(loader.Dir(filepath.Dir(path)), isUnconfined, limits)
 	sess, err := session.NewEmbeddable(src, load, tsvsheet.Path(filepath.Base(path)), limits, fetcher)
 	if err != nil {
 		return nil, nil, err

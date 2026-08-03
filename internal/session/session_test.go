@@ -268,3 +268,23 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestNewEmbeddable_RefusesOverBudgetDocuments pins the 018 boundary at the
+// session: an editing session must never hold a document its own limits
+// forbid — the bounded parse refuses as ErrDocTooLarge before anything
+// materializes, and the same document under a raised budget loads.
+func TestNewEmbeddable_RefusesOverBudgetDocuments(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("a\tb\nc\td\n")
+	tight := tsvsheet.DefaultLimits()
+	tight.ResidentCells = 1
+	_, err := session.NewEmbeddable(src, nil, "", tight, nil)
+	require.ErrorIs(t, err, tsvsheet.ErrDocTooLarge)
+
+	raised := tight
+	raised.ResidentCells = 4
+	sess, err := session.NewEmbeddable(src, nil, "", raised, nil)
+	require.NoError(t, err, "the same document under a raised budget loads — budgets are policy")
+	assert.NotNil(t, sess)
+}

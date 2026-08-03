@@ -20,9 +20,11 @@ const (
 
 // sheetLoader builds the loader for a sheet rooted at dir: confined to dir via
 // os.Root by default, or reading any path when isUnconfined is set.
-func sheetLoader(dir loader.Dir, isUnconfined pathAccess) tsvsheet.Loader {
+// Loads are bounded by limits (spec 018) — a referenced sheet pays the same
+// budget as the sheet that names it.
+func sheetLoader(dir loader.Dir, isUnconfined pathAccess, limits tsvsheet.Limits) tsvsheet.Loader {
 	if isUnconfined {
-		return loader.Unconfined(dir)
+		return loader.Unconfined(dir, limits)
 	}
-	return loader.FS(dir)
+	return loader.FS(dir, limits)
 }

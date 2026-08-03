@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -242,4 +243,26 @@ func TestBuildRefresh_ScheduledCadence(t *testing.T) {
 	next, err := buildRefresh("", scheduled)
 	require.NoError(t, err)
 	assert.Equal(t, 5*time.Minute, next(time.Now()))
+}
+
+// TestLoadServer_RefusesOverBudgetDocuments pins the 018 serve boundary: a
+// document over the resident budget refuses at startup with the flag guidance
+// — never an unbounded materialization behind a listening socket — and the
+// same file under a raised budget serves.
+func TestLoadServer_RefusesOverBudgetDocuments(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "big.tsvt")
+	require.NoError(t, os.WriteFile(path, []byte("a\tb\nc\td\ne\tf\n"), 0o600))
+
+	tight := tsvsheet.DefaultLimits()
+	tight.ResidentCells = 2
+	_, err := loadServer(serveConfig{source: sourcePath(path), limits: tight})
+	require.ErrorIs(t, err, tsvsheet.ErrDocTooLarge)
+	assert.Contains(t, err.Error(), "--max-cells", "the refusal names the remedy")
+
+	raised := tight
+	raised.ResidentCells = 6
+	_, err = loadServer(serveConfig{source: sourcePath(path), limits: raised})
+	require.NoError(t, err, "the same file under a raised budget serves — budgets are policy")
 }
