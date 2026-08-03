@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"bytes"
 	"io"
 	"os"
 
@@ -58,22 +59,85 @@ func readAll(r io.Reader) ([]byte, error) {
 	return data, nil
 }
 
-// parseDocument reads a spreadsheet source fully and parses it with its
-// physical line layout, so the `#.` view directives survive — a plain sheet
-// drops the lines they live on.
-func parseDocument(r io.Reader) (tsvsheet.Document, error) {
-	src, err := readAll(r)
+// parseDocument reads a spreadsheet source and parses it with its physical
+// line layout, so the `#.` view directives survive — a plain sheet drops the
+// lines they live on. The load is bounded (spec 018): a file source is
+// census-vetted BEFORE buffering (an over-budget 1.3 GB file refuses in
+// O(index) memory rather than a gigabyte transient —
+// TestReadBounded_VetsFilesBeforeBuffering states this), a byte-buffered source is
+// vetted before parsing, and every refusal is built by vetCensus — one
+// message, the census, the budget, and the remedies.
+func parseDocument(r io.Reader, limits tsvsheet.Limits) (tsvsheet.Document, error) {
+	src, err := readBounded(r, limits)
 	if err != nil {
 		return tsvsheet.Document{}, err
 	}
 	return tsvsheet.ParseDocument(src)
 }
 
-// parseSheet reads a spreadsheet source fully and parses it.
-func parseSheet(r io.Reader) (tsvsheet.Sheet, error) {
-	src, err := readAll(r)
+// parseSheet reads a spreadsheet source and parses it, bounded like
+// parseDocument.
+func parseSheet(r io.Reader, limits tsvsheet.Limits) (tsvsheet.Sheet, error) {
+	src, err := readBounded(r, limits)
 	if err != nil {
 		return tsvsheet.Sheet{}, err
 	}
 	return tsvsheet.Parse(src)
+}
+
+// statReaderAt is the shape a source must have for the pre-buffer census: a
+// positional reader with a size. *os.File has it; the interface (rather than
+// a concrete *os.File assert) is what lets a test PROVE the vet happens
+// before buffering — TestReadBounded_VetsFilesBeforeBuffering's double, whose
+// sequential Read explodes, passes the vet through ReadAt without buffering.
+type statReaderAt interface {
+	io.Reader
+	io.ReaderAt
+	Stat() (os.FileInfo, error)
+}
+
+// readBounded reads a source fully, refusing an over-budget document as early
+// as its shape allows: a file-shaped source is census-vetted through ReadAt
+// before any buffering; anything else buffers first and is vetted before the
+// caller parses. The bytes returned are exactly the bytes vetted, so the
+// plain parse that follows cannot exceed the budget.
+func readBounded(r io.Reader, limits tsvsheet.Limits) ([]byte, error) {
+	if f, ok := r.(statReaderAt); ok {
+		if err := vetFile(f, limits); err != nil {
+			return nil, err
+		}
+	}
+	src, err := readAll(r)
+	if err != nil {
+		return nil, err
+	}
+	return src, vetCensus(tsvsheet.ByteSource{ReadAt: bytes.NewReader(src), Size: int64(len(src))}, limits)
+}
+
+// vetFile census-vets an open file in place: ReadAt is positional, so the
+// scan leaves the file's read offset untouched for the buffering that
+// follows an in-budget verdict.
+func vetFile(f statReaderAt, limits tsvsheet.Limits) error {
+	info, err := f.Stat()
+	if err != nil {
+		return constants.ErrOpenFile.With(err)
+	}
+	return vetCensus(tsvsheet.ByteSource{ReadAt: f, Size: info.Size()}, limits)
+}
+
+// vetCensus refuses a source whose cell count exceeds the resident ceiling
+// the engine itself resolves (EffectiveResidentCells — the same single
+// ceiling --max-cells sets), with the CLI's remedies attached.
+func vetCensus(src tsvsheet.ByteSource, limits tsvsheet.Limits) error {
+	census, err := tsvsheet.Census(src)
+	if err != nil {
+		return err
+	}
+	budget := limits.EffectiveResidentCells()
+	if census.Cells > budget {
+		return tsvsheet.ErrDocTooLarge.With(nil,
+			"cells", census.Cells, "budget", budget,
+			"hint", "raise --max-cells to accept the cost, or view any size with `tsv tui`")
+	}
+	return nil
 }

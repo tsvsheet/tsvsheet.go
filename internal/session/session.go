@@ -50,8 +50,10 @@ func NewEmbeddable(
 ) (*Session, error) {
 	// A Document, not a bare Sheet: it carries the file's physical lines, so the
 	// comments, shebang and `#.` view directives a grid drops survive an edit and
-	// are written back in place.
-	parsed, err := tsvsheet.ParseDocument(src)
+	// are written back in place. The parse is bounded (spec 018): a document
+	// over the session's resident budget refuses instead of materializing —
+	// an editing session must never hold what its own limits forbid.
+	parsed, err := tsvsheet.ParseDocumentWith(src, withDefaults(limits))
 	if err != nil {
 		return nil, err
 	}

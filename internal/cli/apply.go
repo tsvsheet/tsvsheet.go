@@ -36,7 +36,7 @@ func runApply(streams Streams, sheet, edits sourcePath, limits tsvsheet.Limits, 
 	if sheet.isStdin() && edits.isStdin() {
 		return constants.ErrApplyBothStdin.With(nil)
 	}
-	doc, batch, err := readApplyInputs(streams, sheet, edits)
+	doc, batch, err := readApplyInputs(streams, sheet, edits, limits)
 	if err != nil {
 		return err
 	}
@@ -51,8 +51,12 @@ func runApply(streams Streams, sheet, edits sourcePath, limits tsvsheet.Limits, 
 }
 
 // readApplyInputs opens and parses the sheet document and the edits batch.
-func readApplyInputs(streams Streams, sheet, edits sourcePath) (tsvsheet.Document, tsvsheet.Edits, error) {
-	doc, err := readApplySheet(streams, sheet)
+func readApplyInputs(
+	streams Streams,
+	sheet, edits sourcePath,
+	limits tsvsheet.Limits,
+) (tsvsheet.Document, tsvsheet.Edits, error) {
+	doc, err := readApplySheet(streams, sheet, limits)
 	if err != nil {
 		return tsvsheet.Document{}, tsvsheet.Edits{}, err
 	}
@@ -65,7 +69,7 @@ func readApplyInputs(streams Streams, sheet, edits sourcePath) (tsvsheet.Documen
 	if err != nil {
 		return tsvsheet.Document{}, tsvsheet.Edits{}, err
 	}
-	batch, err := tsvsheet.ParseEdits(data)
+	batch, err := tsvsheet.ParseEditsWith(data, limits)
 	if err != nil {
 		return tsvsheet.Document{}, tsvsheet.Edits{}, err
 	}
@@ -73,13 +77,13 @@ func readApplyInputs(streams Streams, sheet, edits sourcePath) (tsvsheet.Documen
 }
 
 // readApplySheet opens and parses the sheet positional.
-func readApplySheet(streams Streams, sheet sourcePath) (tsvsheet.Document, error) {
+func readApplySheet(streams Streams, sheet sourcePath, limits tsvsheet.Limits) (tsvsheet.Document, error) {
 	reader, release, err := sheet.open(streams.In)
 	if err != nil {
 		return tsvsheet.Document{}, err
 	}
 	defer func() { _ = release() }()
-	return parseDocument(reader)
+	return parseDocument(reader, limits)
 }
 
 // writeApplyResult persists the applied document per the sheet source and

@@ -39,7 +39,7 @@ func TestRunFromJSON_RoundTrip(t *testing.T) {
 	t.Parallel()
 
 	streams, out, _ := streamsWith(`{"rows":[["a","","=A1"],["1","2","3"]]}`)
-	require.NoError(t, runFromJSON(streams, "-"))
+	require.NoError(t, runFromJSON(streams, "-", tsvsheet.DefaultLimits()))
 	assert.Equal(t, "a\t\t=A1\n1\t2\t3\n", out.String())
 }
 
@@ -47,7 +47,7 @@ func TestRunFromJSON_BadJSON(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("not json")
-	err := runFromJSON(streams, "-")
+	err := runFromJSON(streams, "-", tsvsheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrSyntax)
 }
@@ -56,7 +56,7 @@ func TestRunFromJSON_FileMissing(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("")
-	err := runFromJSON(streams, "/no/such.json")
+	err := runFromJSON(streams, "/no/such.json", tsvsheet.DefaultLimits())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOpenFile)
 }
@@ -113,4 +113,23 @@ func TestRunParse_ReadError(t *testing.T) {
 	err := runParse(streams, "-", false, false, tsvsheet.DefaultLimits(), nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tsvsheet.ErrReadInput)
+}
+
+// TestRunFromJSON_RefusesOverBudgetGrids pins the JSON round trip's budget at
+// the unit level (the integration suite drives it through the full CLI): a
+// decoded grid over the resident ceiling refuses as ErrDocTooLarge with the
+// flag hint; in budget it round-trips.
+func TestRunFromJSON_RefusesOverBudgetGrids(t *testing.T) {
+	t.Parallel()
+
+	tight := tsvsheet.DefaultLimits()
+	tight.ResidentCells = 2
+	path := writeTemp(t, "grid.json", `{"rows":[["a","b"],["c","d"]]}`)
+	err := runFromJSON(Streams{Out: &bytes.Buffer{}}, sourcePath(path), tight)
+	require.ErrorIs(t, err, tsvsheet.ErrDocTooLarge)
+	assert.Contains(t, err.Error(), "--max-cells")
+
+	out := &bytes.Buffer{}
+	require.NoError(t, runFromJSON(Streams{Out: out}, sourcePath(path), tsvsheet.DefaultLimits()))
+	assert.Equal(t, "a\tb\nc\td\n", out.String())
 }

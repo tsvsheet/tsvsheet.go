@@ -89,7 +89,7 @@ func wireRefresh(sess *session.Session, cache *importer.Cache) {
 	}
 }
 
-// importedAction is streamAction that also injects the --max-cells resource
+// importedAction adapts a stream-injected function to a cli Action and injects the --max-cells resource
 // limits and resolves the import Fetcher (nil when --allow-import is off) from
 // the flags, for the one-shot compute commands (render, parse). Flag validation
 // failures surface as the command's error.

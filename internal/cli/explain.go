@@ -37,7 +37,7 @@ func runExplain(streams Streams, cfg explainConfig) error {
 	}
 	defer func() { _ = release() }()
 
-	parsed, err := parseSheet(reader)
+	parsed, err := parseSheet(reader, cfg.limits)
 	if err != nil {
 		return err
 	}

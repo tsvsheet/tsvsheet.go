@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/tsvsheet/go-tsvsheet"
@@ -36,7 +37,7 @@ func runParse(
 	}
 	defer func() { _ = release() }()
 
-	parsed, err := parseSheet(reader)
+	parsed, err := parseSheet(reader, limits)
 	if err != nil {
 		return err
 	}
@@ -50,7 +51,7 @@ func runParse(
 // runFromJSON reads a sheetView JSON (from parse) and writes its source rows as
 // TSV — the inverse of parse, so a spreadsheet round-trips through JSON. Any
 // computed values in the input are ignored; the source rows are authoritative.
-func runFromJSON(streams Streams, source sourcePath) error {
+func runFromJSON(streams Streams, source sourcePath, limits tsvsheet.Limits) error {
 	reader, release, err := source.open(streams.In)
 	if err != nil {
 		return err
@@ -61,7 +62,27 @@ func runFromJSON(streams Streams, source sourcePath) error {
 	if err := json.NewDecoder(reader).Decode(&view); err != nil {
 		return tsvsheet.ErrSyntax.With(err)
 	}
+	if err := vetGrid(view.Rows, limits); err != nil {
+		return err
+	}
 	return tsvsheet.WriteTSV(streams.Out, view.Rows)
+}
+
+// vetGrid refuses a decoded grid whose cell count exceeds the resident
+// ceiling — the JSON round trip obeys the same budget as every load
+// (spec 018); the decode transient is bounded by the input's own bytes.
+func vetGrid(rows tsvsheet.Grid, limits tsvsheet.Limits) error {
+	var cells int64
+	for _, row := range rows {
+		cells += int64(len(row))
+	}
+	budget := limits.EffectiveResidentCells()
+	if cells > budget {
+		return tsvsheet.ErrDocTooLarge.With(nil,
+			"cells", cells, "budget", budget,
+			"hint", "raise --max-cells to accept the cost")
+	}
+	return nil
 }
 
 // parseCommand builds the `parse` command.
@@ -117,8 +138,9 @@ the inverse of parse. Computed "values" in the input are ignored.
 Examples:
   tsv parse sheet.tsvt | tsv from-json
   jq '.rows[0] |= ascii_upcase' data.json | tsv from-json`,
-		Action: streamAction(func(s Streams, args positional) error {
-			return runFromJSON(s, args.at(0))
-		}),
+		Action: func(_ context.Context, c *cli.Command) error {
+			streams := Streams{In: stdin, Out: c.Root().Writer, Err: stderr}
+			return runFromJSON(streams, positional(c.Args().Slice()).at(0), maxCellsLimits(c))
+		},
 	}
 }

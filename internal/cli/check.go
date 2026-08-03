@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -16,14 +17,14 @@ import (
 // per line to the error stream. It returns ErrSyntax on a parse failure
 // (exit 2), ErrDiagnostics when the sheet parses but has findings (exit 1), or
 // nil when clean (exit 0).
-func runCheck(streams Streams, source sourcePath) error {
+func runCheck(streams Streams, source sourcePath, limits tsvsheet.Limits) error {
 	reader, release, err := source.open(streams.In)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = release() }()
 
-	doc, err := parseDocument(reader)
+	doc, err := parseDocument(reader, limits)
 	if err != nil {
 		return err
 	}
@@ -74,8 +75,9 @@ error.
 Examples:
   tsv check sheet.tsvt
   cat sheet.tsvt | tsv check`,
-		Action: streamAction(func(s Streams, args positional) error {
-			return runCheck(s, args.at(0))
-		}),
+		Action: func(_ context.Context, c *cli.Command) error {
+			streams := Streams{In: stdin, Out: c.Root().Writer, Err: stderr}
+			return runCheck(streams, positional(c.Args().Slice()).at(0), maxCellsLimits(c))
+		},
 	}
 }
