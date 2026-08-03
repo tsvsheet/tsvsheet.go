@@ -32,7 +32,9 @@ const (
 	flagFormat  = "format"
 	usageFormat = "Output format for the computed grid: tsv (default), csv, html, or markdown (md)"
 	flagHidden  = "hidden"
+	flagCell    = "cell"
 	usageHidden = "What to do with rows and columns the sheet hides: keep (default) or drop"
+	usageCell   = "Print only this cell's computed value, verbatim (A1 notation), instead of the grid"
 )
 
 // rendering is a fully serialized grid, ready to write to an output stream.

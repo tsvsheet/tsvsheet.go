@@ -132,11 +132,11 @@ func TestRunRenderHonoursHidden(t *testing.T) {
 	const src = "#.header\trows(count(1))\n#.hide\tcols(range(C:C))\nname\tqty\tnote\nwidget\t3\tscratch\n"
 
 	kept, out, _ := streamsWith(src)
-	require.NoError(t, runRender(kept, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil))
+	require.NoError(t, runRender(kept, "-", formatTSV, hiddenKeep, false, tsvsheet.DefaultLimits(), nil, ""))
 	assert.Equal(t, "name\tqty\tnote\nwidget\t3\tscratch\n", out.String())
 
 	dropped, projected, _ := streamsWith(src)
-	require.NoError(t, runRender(dropped, "-", formatTSV, hiddenDrop, false, tsvsheet.DefaultLimits(), nil))
+	require.NoError(t, runRender(dropped, "-", formatTSV, hiddenDrop, false, tsvsheet.DefaultLimits(), nil, ""))
 	assert.Equal(t, "name\tqty\nwidget\t3\n", projected.String())
 }
 
@@ -146,7 +146,7 @@ func TestRunRenderRejectsAnUnknownHiddenPolicy(t *testing.T) {
 	t.Parallel()
 
 	streams, _, _ := streamsWith("a\tb\n")
-	err := runRender(streams, "-", formatTSV, "maybe", false, tsvsheet.DefaultLimits(), nil)
+	err := runRender(streams, "-", formatTSV, "maybe", false, tsvsheet.DefaultLimits(), nil, "")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrUnknownHiddenPolicy)
 }

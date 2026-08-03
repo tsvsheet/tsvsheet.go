@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"fmt"
+	"io"
 	"path/filepath"
 	"time"
 
 	"github.com/tsvsheet/go-tsvsheet"
 	"github.com/urfave/cli/v3"
 
+	"github.com/tsvsheet/tsvsheet.go/internal/constants"
 	"github.com/tsvsheet/tsvsheet.go/internal/loader"
 )
 
@@ -22,6 +25,7 @@ func runRender(
 	isUnconfined pathAccess,
 	limits tsvsheet.Limits,
 	fetcher tsvsheet.Fetcher,
+	cell cellRef,
 ) error {
 	reader, release, err := source.open(streams.In)
 	if err != nil {
@@ -34,12 +38,46 @@ func runRender(
 		return err
 	}
 	grid := doc.Sheet().ComputeWith(computeOptions(source, isUnconfined, limits, fetcher))
+	if cell != "" {
+		return writeCell(streams.Out, grid, cell)
+	}
 	view, _ := doc.View()
 	seen, err := project(grid, view, hidden)
 	if err != nil {
 		return err
 	}
 	return format(streams.Out, seen, outputFormat)
+}
+
+// cellRef is an A1 address naming the single cell --cell extracts.
+type cellRef string
+
+// writeCell prints one computed cell verbatim — no tab joining, no format, no
+// escaping — with a single trailing newline;
+// TestRender_CellPrintsOneValueVerbatim asserts those bytes, terminator
+// included. This is the emitter-sheet escape hatch: a cell whose computed
+// value is a whole SVG, dot graph or JSON document does not survive the TSV
+// grid, where an embedded newline reads back as another row.
+// `tsv render --cell B2 chart.tsvt > chart.svg` is the whole pipeline.
+//
+// The trailing newline follows the unix convention and suits every text
+// target; a variant that omits it would be its own flag, left uninvented
+// until someone needs it.
+func writeCell(w io.Writer, grid tsvsheet.Grid, cell cellRef) error {
+	addr, err := tsvsheet.ParseAddress(tsvsheet.AddressText(cell))
+	if err != nil {
+		return tsvsheet.ErrInvalidValue.With(err, flagCell, string(cell))
+	}
+	if addr.Row < 0 || addr.Row >= len(grid) || addr.Col < 0 || addr.Col >= len(grid[addr.Row]) {
+		// Outside the computed grid: the sheet does not have that cell, which
+		// is a usage error, not an empty answer.
+		return constants.ErrOutsideGrid.With(nil, flagCell, string(cell))
+	}
+	_, err = fmt.Fprintln(w, grid[addr.Row][addr.Col])
+	if err != nil {
+		return tsvsheet.ErrWriteFile.With(err)
+	}
+	return nil
 }
 
 // computeOptions builds the compute options for a source: a filesystem sheet
@@ -70,6 +108,7 @@ func renderCommand() *cli.Command {
 	isUnconfined := false
 	outputFormat := string(formatTSV)
 	hidden := string(hiddenKeep)
+	cell := ""
 	return &cli.Command{
 		Name:      cmdRender,
 		Usage:     "Compute a spreadsheet and write the values (TSV, CSV, HTML, or Markdown).",
@@ -84,8 +123,14 @@ so hidden rows and columns are written out like any other data.
 --hidden=drop asks for the projected artifact instead, with them removed.
 Declared header rows are marked up where a format can carry them (HTML thead).
 
+--cell REF prints one computed cell verbatim instead of the grid — no tabs,
+no escaping, embedded newlines intact — which is how a sheet that computes a
+whole SVG, dot graph or JSON document hands it to the next program.
+
 Examples:
   tsv render sheet.tsvt
+  tsv render --cell B2 chart.tsvt > chart.svg
+  tsv render --cell A1 graph.tsvt | dot -Tsvg
   tsv render --format csv sheet.tsvt
   tsv render -f markdown sheet.tsvt
   cat sheet.tsvt | tsv render`,
@@ -105,6 +150,13 @@ Examples:
 				Usage:       usageHidden,
 				Destination: &hidden,
 			},
+			&cli.StringFlag{
+				Name:        flagCell,
+				Sources:     cli.EnvVars("TSV_CELL"),
+				Value:       "", // empty is the default: the whole grid, as always
+				Usage:       usageCell,
+				Destination: &cell,
+			},
 			&cli.BoolFlag{
 				Name:        flagAllowAnyPaths,
 				Sources:     cli.EnvVars("TSV_ALLOW_ANY_PATHS"),
@@ -116,7 +168,7 @@ Examples:
 			func(s Streams, args positional, limits tsvsheet.Limits, fetcher tsvsheet.Fetcher) error {
 				return runRender(
 					s, args.at(0), Format(outputFormat), hiddenPolicy(hidden),
-					pathAccess(isUnconfined), limits, fetcher,
+					pathAccess(isUnconfined), limits, fetcher, cellRef(cell),
 				)
 			},
 		),
