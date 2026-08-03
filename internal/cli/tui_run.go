@@ -30,10 +30,10 @@ var runProgram = func(model tea.Model, in io.Reader, out io.Writer) error {
 // which reads bounded viewport windows while the file stays on disk (spec
 // 016). Raising --max-cells makes any size editable — budgets are policy.
 func runTUI(streams Streams, cfg tuiConfig) error {
-	if windowed, closeSource := openWindowed(cfg.source, cfg.limits); windowed != nil {
+	if windowed, drift, closeSource := openWindowed(cfg.source, cfg.limits); windowed != nil {
 		defer func() { _ = closeSource() }()
 		opts := tsvsheet.ComputeOptions{At: time.Now(), Limits: cfg.limits, Fetcher: cfg.fetcher}
-		return runProgram(tui.NewPager(windowed, opts), streams.In, streams.Out)
+		return runProgram(tui.NewPager(windowed, opts, drift), streams.In, streams.Out)
 	}
 	sess, persist, err := loadEditable(cfg.source, cfg.isUnconfined, cfg.limits, cfg.fetcher)
 	if err != nil {
@@ -47,16 +47,6 @@ func runTUI(streams Streams, cfg tuiConfig) error {
 	return runProgram(tui.New(sess, tui.Saver(persist), next), streams.In, streams.Out)
 }
 
-// statSize reports the open file's size. It is a package variable so tests
-// can force the stat failure branch — the sanctioned stdlib-fault seam.
-var statSize = func(f *os.File) (int64, error) {
-	info, err := f.Stat()
-	if err != nil {
-		return 0, err
-	}
-	return info.Size(), nil
-}
-
 // openWindowed opens the file through the engine's residency policy — one
 // OpenSheet call with the caller's real limits, so policy lives in the engine
 // and is never mirrored here. Only an over-budget document returns: the
@@ -67,25 +57,30 @@ var statSize = func(f *os.File) (int64, error) {
 // refused scan — returns nil and falls through to loadEditable, which stays
 // the single voice for every load and every error, byte-identical to the
 // pre-016 surface. The expensive case — a huge file — costs exactly one scan.
-func openWindowed(source sourcePath, limits tsvsheet.Limits) (*tsvsheet.WindowedSheet, func() error) {
+// The second result is the drift guard that re-stats the held descriptor per
+// window (spec 017); the third keeps the file open for the pager's lifetime.
+func openWindowed(
+	source sourcePath,
+	limits tsvsheet.Limits,
+) (*tsvsheet.WindowedSheet, func() error, func() error) {
 	if source.isStdin() {
-		return nil, nil // stdin is refused by loadEditable's own message, even if a file named "-" exists
+		return nil, nil, nil // stdin is refused by loadEditable's own message, even if a file named "-" exists
 	}
 	f, err := os.Open(filepath.Clean(string(source)))
 	if err != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
-	size, err := statSize(f)
+	size, mtime, err := statSource(f)
 	if err != nil {
 		_ = f.Close()
-		return nil, nil
+		return nil, nil, nil
 	}
-	_, windowed, err := tsvsheet.OpenSheet(tsvsheet.ByteSource{ReadAt: f, Size: size}, limits)
+	_, windowed, err := tsvsheet.OpenSheet(tsvsheet.ByteSource{ReadAt: f, Size: int64(size)}, limits)
 	if err != nil || windowed == nil {
 		_ = f.Close()
-		return nil, nil
+		return nil, nil, nil
 	}
-	return windowed, f.Close
+	return windowed, sourceDrift(f, size, mtime), f.Close
 }
 
 // loadEditable reads a file-backed spreadsheet into a session and returns it

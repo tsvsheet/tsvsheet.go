@@ -33,6 +33,7 @@ const (
 	ErrOpenFile            errs.Const = "failed to open file"
 	ErrServeAddress        errs.Const = "malformed serve address"
 	ErrServeExposed        errs.Const = "refusing a non-loopback bind"
+	ErrSourceChanged       errs.Const = "file changed on disk — reopen"
 	ErrUnknownFormat       errs.Const = "unknown render format"
 	ErrUnknownHiddenPolicy errs.Const = "unknown hidden policy"
 	ErrUnsupported         errs.Const = "unsupported construct"

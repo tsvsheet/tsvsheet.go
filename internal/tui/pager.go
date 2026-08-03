@@ -18,6 +18,7 @@ import (
 type Pager struct {
 	err    error
 	sheet  *tsvsheet.WindowedSheet
+	drift  func() error
 	window tsvsheet.Grid
 	opts   tsvsheet.ComputeOptions
 	census tsvsheet.SheetCensus
@@ -27,9 +28,12 @@ type Pager struct {
 }
 
 // NewPager builds a pager over a windowed sheet; opts carry the compute
-// budgets and clock every viewport evaluation runs under.
-func NewPager(sheet *tsvsheet.WindowedSheet, opts tsvsheet.ComputeOptions) Pager {
-	return Pager{sheet: sheet, opts: opts, census: sheet.Census()}
+// budgets and clock every viewport evaluation runs under. drift is consulted
+// before each window fetch — a non-nil result renders as the error frame
+// (spec 017: a file mutated in place while paged refuses honestly); nil
+// disables the guard.
+func NewPager(sheet *tsvsheet.WindowedSheet, opts tsvsheet.ComputeOptions, drift func() error) Pager {
+	return Pager{sheet: sheet, opts: opts, census: sheet.Census(), drift: drift}
 }
 
 // Init is the bubbletea entry; the first window loads on the initial resize.
@@ -82,9 +86,16 @@ func (p Pager) visible() int {
 	return p.height - pagerChrome
 }
 
-// fetched scrolls to top (clamped to the grid) and computes that viewport.
+// fetched scrolls to top (clamped to the grid) and computes that viewport,
+// refusing first if the source has drifted under the pager.
 func (p Pager) fetched(top int) Pager {
 	p.top = min(max(top, 0), max(p.census.Rows-p.visible(), 0))
+	if p.drift != nil {
+		if err := p.drift(); err != nil {
+			p.window, p.err = nil, err
+			return p
+		}
+	}
 	p.window, p.err = p.sheet.ComputeRows(p.top, p.visible(), p.opts)
 	return p
 }

@@ -26,7 +26,7 @@ func pagerOver(t *testing.T, src string) tui.Pager {
 		tsvsheet.ByteSource{ReadAt: bytes.NewReader([]byte(src)), Size: int64(len(src))}, limits)
 	require.NoError(t, err)
 	require.NotNil(t, windowed)
-	return tui.NewPager(windowed, tsvsheet.ComputeOptions{At: time.Now(), Limits: tsvsheet.DefaultLimits()})
+	return tui.NewPager(windowed, tsvsheet.ComputeOptions{At: time.Now(), Limits: tsvsheet.DefaultLimits()}, nil)
 }
 
 // sized delivers the initial terminal size, loading the first window.
@@ -149,7 +149,7 @@ func TestPagerSurfacesAComputeError(t *testing.T) {
 	require.NotNil(t, windowed)
 	flaky.poisoned = true
 
-	p := sized(t, tui.NewPager(windowed, tsvsheet.ComputeOptions{At: time.Now()}), 5)
+	p := sized(t, tui.NewPager(windowed, tsvsheet.ComputeOptions{At: time.Now()}, nil), 5)
 	assert.True(t, strings.HasPrefix(p.View(), "error: "), "got %q", p.View())
 	assert.Contains(t, p.View(), "q quits", "the error frame still tells the user how to leave")
 }
@@ -191,4 +191,73 @@ func TestPagerIgnoresUnrelatedMessagesAndKeys(t *testing.T) {
 
 	tiny := sized(t, pagerOver(t, "a\nb\nc\n"), 1)
 	assert.Contains(t, tiny.View(), "rows 1–1", "a too-short terminal still shows one row")
+}
+
+// TestPagerRefusesWhenTheDriftGuardTrips pins the 017 contract at the model:
+// a tripped guard renders the guard's error with the quit hint and no grid —
+// never a window computed over a drifted source — and a healthy guard is
+// consulted without disturbing the frame.
+func TestPagerRefusesWhenTheDriftGuardTrips(t *testing.T) {
+	t.Parallel()
+
+	limits := tsvsheet.DefaultLimits()
+	limits.ResidentCells = 1
+	src := "a\nb\nc\n"
+	_, windowed, err := tsvsheet.OpenSheet(
+		tsvsheet.ByteSource{ReadAt: bytes.NewReader([]byte(src)), Size: int64(len(src))}, limits)
+	require.NoError(t, err)
+	require.NotNil(t, windowed)
+
+	guarded := struct{ tripped bool }{}
+	drift := func() error {
+		if guarded.tripped {
+			return assert.AnError
+		}
+		return nil
+	}
+	p := sized(t, tui.NewPager(windowed, tsvsheet.ComputeOptions{At: time.Now()}, drift), 4)
+	assert.Contains(t, p.View(), "a", "a healthy guard leaves the window alone")
+
+	guarded.tripped = true
+	p = press(t, p, "down")
+	view := p.View()
+	assert.True(t, strings.HasPrefix(view, "error: "), "got %q", view)
+	assert.Contains(t, view, assert.AnError.Error(), "the guard's own error is the frame")
+	assert.Contains(t, view, "q quits", "the refusal still tells the user how to leave")
+	assert.NotContains(t, view, "view-only", "no grid or census renders over a drifted source")
+}
+
+// countingReadAt counts reads through to its backing bytes.
+type countingReadAt struct {
+	data  []byte
+	reads int
+}
+
+func (c *countingReadAt) ReadAt(p []byte, off int64) (int, error) {
+	c.reads++
+	if off >= int64(len(c.data)) {
+		return 0, io.EOF
+	}
+	return copy(p, c.data[off:]), nil
+}
+
+// TestPagerConsultsTheGuardBeforeAnyRead pins the stated ordering: a refusing
+// guard means the source is not read AT ALL for that window — never computed
+// first and refused after, which would pull drifted bytes into the shared
+// block cache.
+func TestPagerConsultsTheGuardBeforeAnyRead(t *testing.T) {
+	t.Parallel()
+
+	limits := tsvsheet.DefaultLimits()
+	limits.ResidentCells = 1
+	src := &countingReadAt{data: []byte("a\nb\nc\n")}
+	_, windowed, err := tsvsheet.OpenSheet(tsvsheet.ByteSource{ReadAt: src, Size: int64(len(src.data))}, limits)
+	require.NoError(t, err)
+	require.NotNil(t, windowed)
+	atOpen := src.reads
+
+	refuse := func() error { return assert.AnError }
+	p := sized(t, tui.NewPager(windowed, tsvsheet.ComputeOptions{At: time.Now()}, refuse), 4)
+	assert.True(t, strings.HasPrefix(p.View(), "error: "))
+	assert.Equal(t, atOpen, src.reads, "a refused window must not touch the source")
 }

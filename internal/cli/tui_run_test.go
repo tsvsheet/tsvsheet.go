@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
@@ -187,7 +188,7 @@ func TestRunTUI_PagerCarriesTheCallersFetcher(t *testing.T) {
 func TestOpenWindowed_StdinPassesThrough(t *testing.T) {
 	t.Parallel()
 
-	windowed, closeSource := openWindowed("-", tinyLimits())
+	windowed, _, closeSource := openWindowed("-", tinyLimits())
 	assert.Nil(t, windowed)
 	assert.Nil(t, closeSource)
 }
@@ -196,15 +197,15 @@ func TestOpenWindowed_StdinPassesThrough(t *testing.T) {
 // in-budget file reports nothing windowed, and the descriptor it probed with
 // is closed — proven through the captured file, not asserted by comment.
 func TestOpenWindowed_InBudgetIsNilAndClosesTheFile(t *testing.T) {
-	prev := statSize
-	t.Cleanup(func() { statSize = prev })
+	prev := statSource
+	t.Cleanup(func() { statSource = prev })
 	var captured *os.File
-	statSize = func(f *os.File) (int64, error) {
+	statSource = func(f *os.File) (byteSize, time.Time, error) {
 		captured = f
 		return prev(f)
 	}
 
-	windowed, closeSource := openWindowed(sheetFile(t), tsvsheet.DefaultLimits())
+	windowed, _, closeSource := openWindowed(sheetFile(t), tsvsheet.DefaultLimits())
 	assert.Nil(t, windowed)
 	assert.Nil(t, closeSource)
 	require.NotNil(t, captured)
@@ -219,7 +220,7 @@ func TestOpenWindowed_MissingFileFallsThrough(t *testing.T) {
 	t.Parallel()
 
 	absent := sourcePath(filepath.Join(t.TempDir(), "absent.tsvt"))
-	windowed, closeSource := openWindowed(absent, tinyLimits())
+	windowed, _, closeSource := openWindowed(absent, tinyLimits())
 	assert.Nil(t, windowed)
 	assert.Nil(t, closeSource)
 
@@ -235,7 +236,7 @@ func TestOpenWindowed_DirectoryKeepsTheOldErrorSurface(t *testing.T) {
 	t.Parallel()
 
 	dir := sourcePath(t.TempDir())
-	windowed, closeSource := openWindowed(dir, tinyLimits())
+	windowed, _, closeSource := openWindowed(dir, tinyLimits())
 	assert.Nil(t, windowed)
 	assert.Nil(t, closeSource)
 
@@ -247,15 +248,15 @@ func TestOpenWindowed_DirectoryKeepsTheOldErrorSurface(t *testing.T) {
 // seam and proves the fall-through leaks no descriptor: after the failure the
 // captured file is already closed and nothing windowed is reported.
 func TestOpenWindowed_StatFailureClosesTheFile(t *testing.T) {
-	prev := statSize
-	t.Cleanup(func() { statSize = prev })
+	prev := statSource
+	t.Cleanup(func() { statSource = prev })
 	var captured *os.File
-	statSize = func(f *os.File) (int64, error) {
+	statSource = func(f *os.File) (byteSize, time.Time, error) {
 		captured = f
-		return 0, assert.AnError
+		return 0, time.Time{}, assert.AnError
 	}
 
-	windowed, closeSource := openWindowed(overBudgetFile(t), tinyLimits())
+	windowed, _, closeSource := openWindowed(overBudgetFile(t), tinyLimits())
 	assert.Nil(t, windowed)
 	assert.Nil(t, closeSource)
 	require.NotNil(t, captured)
@@ -268,17 +269,17 @@ func TestOpenWindowed_StatFailureClosesTheFile(t *testing.T) {
 // fall-through closes the descriptor while runTUI surfaces the editable
 // path's own refusal for the same file.
 func TestOpenWindowed_ScanRefusalFallsThroughClosed(t *testing.T) {
-	prev := statSize
-	t.Cleanup(func() { statSize = prev })
+	prev := statSource
+	t.Cleanup(func() { statSource = prev })
 	var captured *os.File
-	statSize = func(f *os.File) (int64, error) {
+	statSource = func(f *os.File) (byteSize, time.Time, error) {
 		captured = f
 		return prev(f)
 	}
 
 	path := filepath.Join(t.TempDir(), "longline.tsvt")
 	require.NoError(t, os.WriteFile(path, append(bytes.Repeat([]byte("a"), (1<<20)+2), '\n'), 0o600))
-	windowed, closeSource := openWindowed(sourcePath(path), tsvsheet.DefaultLimits())
+	windowed, _, closeSource := openWindowed(sourcePath(path), tsvsheet.DefaultLimits())
 	assert.Nil(t, windowed)
 	assert.Nil(t, closeSource)
 	require.NotNil(t, captured)
