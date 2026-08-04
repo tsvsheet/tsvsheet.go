@@ -31,7 +31,8 @@ func runServe(ctx context.Context, cfg serveConfig) error {
 	if err != nil {
 		return err
 	}
-	http := httpserver.New(slog.Default(), httpserver.Host(cfg.host), httpserver.Port(cfg.port), server.Handler())
+	http := httpserver.New(slog.Default(), httpserver.Host(cfg.host), httpserver.Port(cfg.port),
+		observed(server.Handler(), "tsv_serve_sheet"))
 	slog.Info("serving spreadsheet", "url", "http://"+http.Addr())
 	return http.Serve(ctx, shutdownTimeout)
 }
