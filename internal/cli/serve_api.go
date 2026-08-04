@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -106,9 +107,13 @@ func buildAPIServer(c *cli.Command) (*http.Server, error) {
 		ComputeEnabled: api.ComputePlane(!c.Bool(flagNoCompute)),
 		Clock:          time.Now,
 	})
+	slog.Info("serving the document api",
+		"url", "http://"+string(address)+"/",
+		"root", c.String(flagRoot),
+		"compute", !c.Bool(flagNoCompute))
 	return &http.Server{
 		Addr:              string(address),
-		Handler:           handler,
+		Handler:           observed(handler, "tsv_serve_api"),
 		ReadHeaderTimeout: apiHeaderTimeout,
 	}, nil
 }

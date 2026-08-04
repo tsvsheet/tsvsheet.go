@@ -153,7 +153,7 @@ func runData(ctx context.Context, cfg dataConfig) error {
 		slog.Default(),
 		httpserver.Host(cfg.host),
 		httpserver.Port(cfg.port),
-		handler,
+		observed(handler, "tsv_data"),
 	)
 	slog.Info("serving data", "url", "http://"+server.Addr()+"/", "root", string(cfg.root))
 	return server.Serve(ctx, shutdownTimeout)
