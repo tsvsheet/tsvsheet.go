@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"log/slog"
+	"net"
+	"strconv"
 	"time"
 
 	httpserver "github.com/gomatic/go-httpserver"
@@ -33,7 +35,11 @@ func runServe(ctx context.Context, cfg serveConfig) error {
 	}
 	http := httpserver.New(slog.Default(), httpserver.Host(cfg.host), httpserver.Port(cfg.port),
 		observed(server.Handler(), "tsv_serve_sheet"))
-	slog.Info("serving spreadsheet", "url", "http://"+http.Addr())
+	slog.Info(
+		"serving spreadsheet",
+		"url",
+		"http://"+listenAddress(httpserver.Host(cfg.host), httpserver.Port(cfg.port)),
+	)
 	return http.Serve(ctx, shutdownTimeout)
 }
 
@@ -112,4 +118,17 @@ func scheduleSpecs(schedules []string) []refresh.Spec {
 		specs[i] = refresh.Spec(s)
 	}
 	return specs
+}
+
+// listenAddress is the host:port a server was configured to bind, for logging.
+//
+// The address is built from the configuration rather than read back off the
+// server. go-httpserver dropped its Addr() accessor in v0.3.0 precisely because
+// it returned the CONFIGURED address, not the bound one — a round trip that
+// looked authoritative while telling the caller only what it had just passed
+// in. This says the same thing without the pretence, and a caller that needs
+// the truly bound address (an ephemeral port) must ask the listener, which is
+// what dataserve.Start does for the scoped data server.
+func listenAddress(host httpserver.Host, port httpserver.Port) string {
+	return net.JoinHostPort(string(host), strconv.Itoa(int(port)))
 }
