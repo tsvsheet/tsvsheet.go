@@ -9,9 +9,9 @@ require (
 	github.com/gomatic/go-httpserver v0.2.0
 	github.com/gomatic/go-log v0.3.10
 	github.com/stretchr/testify v1.11.1
-	github.com/tsvsheet/go-isnow v0.1.7
-	github.com/tsvsheet/go-tsvsheet v0.27.6
-	github.com/tsvsheet/tsvsheet.api v0.2.9
+	github.com/tsvsheet/go-isnow v0.1.8
+	github.com/tsvsheet/go-tsvsheet v0.27.9
+	github.com/tsvsheet/tsvsheet.api v0.2.10
 	github.com/urfave/cli/v3 v3.10.1
 )
 
