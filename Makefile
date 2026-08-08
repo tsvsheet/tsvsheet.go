@@ -89,6 +89,9 @@ GOTESTSUM     = $(gobin-or-die)/gotestsum
 GOVULNCHECK   = $(gobin-or-die)/govulncheck
 GORELEASER    = $(gobin-or-die)/goreleaser
 GOLINES       = $(gobin-or-die)/golines
+NILAWAY       = $(gobin-or-die)/nilaway
+DEADCODE      = $(gobin-or-die)/deadcode
+GREMLINS      = $(gobin-or-die)/gremlins
 
 # yq is the one tool consulted at PARSE time (EXEMPT and BINARIES below expand
 # during Makefile read), where gobin-or-die would abort even `make help` on a
@@ -155,6 +158,22 @@ GOARCH    ?= $(shell go env GOARCH)
 COVERAGE_FOLDER ?= var
 GO_TEST_FORMAT  ?= standard-verbose
 
+# GO_TEST_SHUFFLE randomizes test execution order. A suite that passes in
+# declaration order but fails shuffled is order-DEPENDENT: some test is quietly
+# relying on another having run first (a package-level var left set, a shared
+# fixture, a temp dir). That is a defect in the tests, not a flake — a result
+# that depends on execution order proves nothing about any single unit. Go
+# prints the seed on failure, so a shuffled failure reproduces with
+# GO_TEST_SHUFFLE=<seed>.
+GO_TEST_SHUFFLE ?= on
+
+# GO_TEST_COUNT applies to the CI race run (`test-all`). `-count=2` runs each
+# test twice in the SAME process, so a test that mutates package-level state and
+# does not restore it fails on the second pass. That is precisely the failure
+# mode a test-installed package var ("test seam") creates, and no other step in
+# this gate detects it.
+GO_TEST_COUNT ?= 2
+
 # Coverage gate: COVER_PKGS is the set of packages whose AGGREGATE statement
 # coverage must reach COVER_THRESHOLD — EVERY package at 100%, default ./...,
 # and that includes cmd/. cmd/* is NOT exempt: keep main() a thin shim that calls
@@ -187,6 +206,13 @@ VET_PKGS        ?= ./...
 #   STATICCHECK_PKGS = $(shell go list ./... | grep -v /src/grammar)
 STATICCHECK_PKGS ?= ./...
 
+# NILAWAY_PKGS / DEADCODE_PKGS are the package sets for the two whole-program
+# analyses below. They narrow in a Makefile.local for the same reason and to the
+# same set as VET_PKGS/STATICCHECK_PKGS: COMMITTED GENERATED trees, whose
+# machine-authored code is not ours to fix.
+NILAWAY_PKGS  ?= ./...
+DEADCODE_PKGS ?= ./...
+
 # COVER_GATE names the target that `check`/`ci` run to enforce coverage. The
 # default is the flat aggregate `cover` gate above. A repo with a different
 # policy (e.g. a per-package ratchet with auditable per-function exceptions)
@@ -210,7 +236,7 @@ $(BUILD_DIR) $(COVERAGE_FOLDER):
 # consumers are green, so they are enforced on every push now — coverage and
 # vulnerabilities can no longer silently regress in CI.
 .PHONY: ci
-ci: standards-validate fmt-check lint staticcheck vulncheck cover-gate test-all build-all ## Aggregate target for CI builds
+ci: standards-validate fmt-check lint staticcheck deadcode tidy-check vulncheck cover-gate test-all build-all ## Aggregate target for CI builds
 
 # True CI parity: run the real `ci` recipe INSIDE the baked toolchain image,
 # so it uses the pinned tools and the exact base environment CI runs in — not the
@@ -277,7 +303,7 @@ standards-validate: ## Validate .standards.yaml exemptions carry reasons
 # runs `test-all` (race) and `build-all` (cross-compile). The complexity linters
 # are part of `lint` now (folded into .golangci.yaml).
 .PHONY: check
-check: standards-validate fmt-check lint staticcheck vulncheck cover-gate ## Full developer gate (CI runs this + race & cross-compile)
+check: standards-validate fmt-check lint staticcheck deadcode tidy-check vulncheck cover-gate ## Full developer gate (CI runs this + race & cross-compile)
 
 # cover-gate routes the coverage step through $(COVER_GATE) (default `cover`) so
 # a repo can swap the coverage policy by setting COVER_GATE in Makefile.local —
@@ -340,36 +366,204 @@ vulncheck-raw:
 vulncheck: ## Run govulncheck (ratchet-aware)
 	@$(call standards-run,gate:vulncheck,$(MAKE) vulncheck-raw)
 
+# nilaway traces a nil value from where it is produced to where it is
+# dereferenced, ACROSS function and package boundaries — strictly beyond what
+# vet/staticcheck do (they reason within one function).
+#
+# ADVISORY, NOT A GATE. Deliberately absent from `check` and `ci`. Measured
+# across six repos it reported four findings and all four were FALSE POSITIVES
+# on nil slices: `spans[i]` inside a `range members` that cannot execute when
+# empty, `parts[len(parts)-1]` guarded by an earlier `len(data) == 0` return,
+# `old[i]` inside a loop bounded by `len(old)`. One was raised only because a
+# test correctly passes nil to exercise the empty case.
+#
+# A blocking gate must be zero-false-positive, or every consumer learns to
+# silence it — and an exemption written for a non-problem is indistinguishable
+# in the ledger from one written for a real gap, which is how a ratchet rots.
+# So this runs on demand, during a quality audit, where a human or agent
+# adjudicates each finding. Promote it to `check` only if its slice precision
+# improves. -exclude-test-files drops the test-origin noise.
+.PHONY: nilaway
+nilaway: ## ADVISORY (not in check/ci): nil-flow analysis; findings need adjudication
+	$(NILAWAY) -exclude-test-files $(NILAWAY_PKGS)
+
+# Mutation testing measures test ADEQUACY — the one thing the 100%-`cover` gate
+# cannot. Coverage proves every statement EXECUTED; it cannot tell an assertion
+# from a bare call. gremlins changes the code on purpose (negates a conditional,
+# shifts a boundary, alters an operator) and reruns the suite: a mutant the tests
+# still PASS against — reported LIVED — is a deliberate behaviour change nothing
+# detected. It mutates only COVERED code, so it is precisely the complement to
+# `cover`, not a second opinion on it.
+#
+# The gap is measured, not theoretical. Weakening ONE assertion in gomatic/go-error
+# (dropping `want.Equal(wantMessage, err.Error())` while still CALLING err.Error(),
+# so every statement stays executed) held statement coverage at 100.0% while
+# efficacy fell 100% -> 33.33%. In gomatic/go-hx — 100% covered, and the repo whose
+# shipped defects motivated this target — two mutants survived: the empty-version
+# message in store/format.go:61 and the error propagation out of the segment loop
+# in store/verify.go:157. Both are contracts those functions' own doc comments
+# state and no test asserts.
+#
+# ADVISORY, NOT A GATE. Deliberately absent from `check` and `ci`, for nilaway's
+# reason (findings need adjudication) plus two of its own:
+#
+#   • EQUIVALENT MUTANTS are an irreducible false positive — a mutant that changes
+#     the code but CANNOT change behaviour. gomatic/go-flagged's lone survivor
+#     mutates `make([]rune, 0, len(meta.Name)*2)` to `/2`: a capacity HINT, so
+#     append() covers the difference and the result is identical (verified by
+#     applying it and running the suite — green). No legitimate test can kill it,
+#     so that repo's honest ceiling is 95%, not 100% — and the ceiling differs per
+#     repo, so there is no fleet-wide threshold to gate on and no stable baseline
+#     to ratchet against.
+#   • The score is TIMING-DEPENDENT. gremlins derives each mutant's test timeout
+#     from how long the coverage run took, so on a fast suite every mutant's fresh
+#     `go test` — which must recompile the mutated package — blows the budget and
+#     lands in TIMED OUT, a status excluded from the efficacy denominator outright.
+#     At the default coefficient gomatic/go-archive reported 21 of 27 mutants
+#     TIMED OUT; at 60 all 27 were KILLED. Worse, it HIDES survivors: go-flagged
+#     read 100.00% efficacy under the default and 95.00% — one real LIVED mutant —
+#     once the timeout was large enough to let the mutants actually run.
+#
+# A verdict that moves with machine speed is not a gate; that is the same reasoning
+# the `cover` recipe records about concurrent runs. So this runs on demand, during a
+# quality audit, where a human or agent adjudicates each survivor.
+#
+# It is also advisory by CONSTRUCTION: with no threshold configured gremlins exits
+# 0 whatever it finds. Do NOT "promote" this by adding --threshold-efficacy — that
+# flag is silently non-functional in v0.6.0 (measured: 33.33% efficacy against
+# --threshold-efficacy 90 still exits 0), so wiring it into a gate would install a
+# check that can never fail. Only a .gremlins.yaml `unleash.threshold.efficacy`
+# enforces (exit 10), and per the equivalent-mutant point above there is no
+# defensible fleet-wide number to put there.
+#
+# MUTATE_TIMEOUT_COEFFICIENT multiplies the coverage-run duration to get each
+# mutant's timeout. gremlins defaults to 2, far too small for a fast suite; 60
+# classified every mutant in the repos measured above. Raise it in a Makefile.local
+# for a repo whose suite is slow enough that real mutants still land in TIMED OUT —
+# a TIMED OUT tally that is not ~0 means the run has not measured anything yet.
+MUTATE_TIMEOUT_COEFFICIENT ?= 60
+
+# MUTATE_EXCLUDE are filepath regexps gremlins must not mutate. testdata/ is
+# excluded by default: an analyzer's testdata/src fixtures are INPUTS to a test,
+# never code the suite executes, so every mutant in them lands in NOT COVERED and
+# drags mutant coverage down over nothing (gomatic/yze-go-gotostmt read 14.29%
+# with them in, 100.00% with them out).
+MUTATE_EXCLUDE ?= testdata/
+
+# MUTATE_PATH is the module path gremlins analyses (it takes a path, not a package
+# pattern). A repo with committed GENERATED trees excludes them via MUTATE_EXCLUDE,
+# matching the COVER_PKGS/VET_PKGS narrowing — machine-authored code is not ours to
+# write tests for.
+MUTATE_PATH ?= .
+
+.PHONY: mutate
+mutate: ## ADVISORY (not in check/ci): mutation testing; LIVED mutants need adjudication
+	$(GREMLINS) unleash \
+		--timeout-coefficient $(MUTATE_TIMEOUT_COEFFICIENT) \
+		$(addprefix --exclude-files ,$(MUTATE_EXCLUDE)) \
+		$(MUTATE_PATH)
+
+# deadcode reports functions unreachable from any entry point. `-test` adds the
+# test binaries as roots, which does two things: a library (no main package)
+# becomes analyzable at all, and a helper reachable only from tests is correctly
+# NOT reported. What remains is genuinely unreachable — delete it.
+#
+# deadcode EXITS 0 even when it reports findings, so a bare `$(DEADCODE) ...`
+# recipe would be a gate that can never fail. The non-empty-output test below is
+# what makes it a gate; do not "simplify" it away. A tool error (non-zero exit)
+# still fails on its own.
+# DEADCODE_FILTER drops the three finding classes that are not this repo's dead
+# code to delete:
+#   ^/          an ABSOLUTE path is a dependency in the module cache. A repo
+#               cannot delete a function inside a module it merely imports.
+#   node_modules|vendor|third_party
+#               vendored third-party trees, which are not ours to edit.
+#   Example     Go example functions are documentation. One without an
+#               `// Output:` comment is compiled but never run, so the tool
+#               calls it unreachable; it is doing its job as written.
+# Measured across the fleet these three accounted for every deadcode finding
+# but one, which is why the gate filters rather than reports them.
+# DEADCODE_TAGS lists the build tags whose files must be visible for the
+# reachability analysis to be honest. deadcode analyses ONE tag configuration,
+# so a helper used only by `//go:build integration` tests looks unreachable
+# without them — the tool reporting exactly what it was asked. A repo with
+# tag-gated tests sets this in its Makefile.local, e.g.
+#   DEADCODE_TAGS = integration
+DEADCODE_TAGS ?=
+DEADCODE_TAGFLAG = $(if $(DEADCODE_TAGS),-tags $(DEADCODE_TAGS),)
+
+DEADCODE_FILTER ?= grep -vE '^/|/node_modules/|/vendor/|/third_party/|unreachable func: Example'
+
+.PHONY: deadcode-raw
+deadcode-raw:
+	@out=$$($(DEADCODE) -test $(DEADCODE_TAGFLAG) $(DEADCODE_PKGS) | $(DEADCODE_FILTER) || true); \
+	test -z "$${out}" || { echo "unreachable code — delete it, or make it reachable from a test:" >&2; echo "$${out}" >&2; exit 1; }
+
+.PHONY: deadcode
+deadcode: ## Fail on code unreachable from any entry point or test (ratchet-aware)
+	@$(call standards-run,gate:deadcode,$(MAKE) deadcode-raw)
+
+# tidy-check asserts `go mod tidy` would be a no-op: go.mod/go.sum describe
+# exactly what the source imports, nothing more. `-diff` (Go 1.23+) reports the
+# change a tidy WOULD make and exits non-zero instead of writing it, so the gate
+# never mutates a consumer's tree. Untidiness is not cosmetic here — a require
+# nothing imports is a dependency (and its CVE surface) sitting in go.sum where
+# govulncheck's source mode cannot see it but Dependabot can.
+TIDY_SUBMODULES := $(addprefix tidy-check@,$(SUBMODULES))
+.PHONY: tidy-check-raw $(TIDY_SUBMODULES)
+tidy-check-raw: $(TIDY_SUBMODULES)
+	go mod tidy -diff
+$(TIDY_SUBMODULES): tidy-check@%:
+	go mod tidy -C $* -diff
+
+.PHONY: tidy-check
+tidy-check: ## Assert go.mod/go.sum are tidy, without rewriting them (ratchet-aware)
+	@$(call standards-run,gate:tidy,$(MAKE) tidy-check-raw)
+
 ##@ Test
 
 TEST_SUBMODULES := $(addprefix test@,$(SUBMODULES))
 .PHONY: test $(TEST_SUBMODULES)
 test: $(TEST_SUBMODULES) ## Run tests (root module + submodules)
-	$(GOTESTSUM) --format $(GO_TEST_FORMAT) -- ./...
+	$(GOTESTSUM) --format $(GO_TEST_FORMAT) -- -shuffle=$(GO_TEST_SHUFFLE) ./...
 $(TEST_SUBMODULES): test@%:
-	go test -C $* ./...
+	go test -C $* -shuffle=$(GO_TEST_SHUFFLE) ./...
 
 TESTALL_SUBMODULES := $(addprefix test-all@,$(SUBMODULES))
 .PHONY: test-all $(TESTALL_SUBMODULES)
 test-all: $(COVERAGE_FOLDER) $(TESTALL_SUBMODULES) ## Run all tests with race detection + coverage
-	CGO_ENABLED=1 $(GOTESTSUM) --format $(GO_TEST_FORMAT) -- -race -short -coverprofile=$(COVERAGE_FOLDER)/coverage.out ./...
+	CGO_ENABLED=1 $(GOTESTSUM) --format $(GO_TEST_FORMAT) -- -race -short -shuffle=$(GO_TEST_SHUFFLE) -count=$(GO_TEST_COUNT) -coverprofile=$(COVERAGE_FOLDER)/coverage.out ./...
 $(TESTALL_SUBMODULES): test-all@%:
-	cd $* && CGO_ENABLED=1 go test -race -short ./...
+	cd $* && CGO_ENABLED=1 go test -race -short -shuffle=$(GO_TEST_SHUFFLE) -count=$(GO_TEST_COUNT) ./...
 
 .PHONY: coverage
 coverage: $(COVERAGE_FOLDER) ## Run tests with coverage
-	$(GOTESTSUM) --format $(GO_TEST_FORMAT) -- -coverprofile=$(COVERAGE_FOLDER)/coverage.out ./...
+	$(GOTESTSUM) --format $(GO_TEST_FORMAT) -- -shuffle=$(GO_TEST_SHUFFLE) -coverprofile=$(COVERAGE_FOLDER)/coverage.out ./...
 
 # The coverage GATE: run COVER_PKGS and fail unless aggregate statement coverage
 # is exactly COVER_THRESHOLD. This is the 100%-coverage enforcement every
 # consumer shares (folded into `check`); a consumer scopes COVER_PKGS to its own
 # tested set. Lists the sub-100% functions on failure so the miss is actionable.
+#
+# The profile is written to a per-invocation path and only moved onto the
+# canonical coverage.out at the end. Writing the shared name directly let two
+# concurrent runs in one repository interleave into it, and the verdict was then
+# read back out of the wreckage: a mangled profile makes `go tool cover` fail,
+# the total parses empty, and the gate reports a coverage miss that the code
+# does not have. A gate whose answer depends on what else happens to be running
+# is not a gate — and a red that goes away on a re-run is worse than a noisy
+# one, because it teaches everyone to re-run until green, which is exactly how
+# a real failure gets waved through.
 .PHONY: cover
 cover: $(COVERAGE_FOLDER) ## Run tests and assert COVER_THRESHOLD coverage of COVER_PKGS
-	$(GOTESTSUM) --format $(GO_TEST_FORMAT) -- -covermode=$(COVER_MODE) -coverpkg=$(COVERPKG) -coverprofile=$(COVERAGE_FOLDER)/coverage.out $(COVER_PKGS)
-	@total=$$(go tool cover -func=$(COVERAGE_FOLDER)/coverage.out | awk '/^total:/{print $$3}'); \
+	@profile=$(COVERAGE_FOLDER)/coverage.$$$$.out; \
+	$(GOTESTSUM) --format $(GO_TEST_FORMAT) -- -shuffle=$(GO_TEST_SHUFFLE) -covermode=$(COVER_MODE) -coverpkg=$(COVERPKG) -coverprofile=$${profile} $(COVER_PKGS) \
+	  || { mv -f $${profile} $(COVERAGE_FOLDER)/coverage.out 2>/dev/null; exit 1; }; \
+	total=$$(go tool cover -func=$${profile} | awk '/^total:/{print $$3}'); \
 	echo "total coverage: $${total}"; \
-	[ "$${total}" = "$(COVER_THRESHOLD)" ] || { echo "coverage $${total} below $(COVER_THRESHOLD):"; go tool cover -func=$(COVERAGE_FOLDER)/coverage.out | awk '$$3 != "100.0%"'; exit 1; }
+	[ "$${total}" = "$(COVER_THRESHOLD)" ] \
+	  || { echo "coverage $${total} below $(COVER_THRESHOLD):"; go tool cover -func=$${profile} | awk '$$3 != "100.0%"'; mv -f $${profile} $(COVERAGE_FOLDER)/coverage.out; exit 1; }; \
+	mv -f $${profile} $(COVERAGE_FOLDER)/coverage.out
 
 # Build-tag-gated tests (integration, e2e, ...). The shared `test`/`test-all`
 # targets run only UNTAGGED unit tests; anything behind a `//go:build <tag>`
@@ -524,14 +718,23 @@ docker-buildx: build-all ## Build + push a multi-arch image manifest (needs buil
 
 ##@ Utilities
 
+# FMT_FILES is the Go source the formatter sees: the whole tree MINUS the
+# directories and files the Go toolchain itself ignores — those whose path has
+# a segment beginning with `_` or `.` (go build/vet/list/mod-tidy all skip
+# them). Formatting must match the compiler: a `_legacy/` port-reference tree,
+# kept verbatim and never built (per its own README), otherwise fails fmt-check
+# over code that is not part of the module. A repo with no such directory sees
+# exactly the whole tree, so its behaviour is unchanged.
+FMT_FILES = $(shell find . -name '*.go' -not -path '*/_*' -not -path '*/.*')
+
 .PHONY: fmt
 fmt: ## Format code (golines then gofumpt)
-	$(GOLINES) -m $(GOLINES_MAX) -w .
-	$(GOFUMPT) -l -w .
+	@[ -z "$(FMT_FILES)" ] || $(GOLINES) -m $(GOLINES_MAX) -w $(FMT_FILES)
+	@[ -z "$(FMT_FILES)" ] || $(GOFUMPT) -l -w $(FMT_FILES)
 
 .PHONY: fmt-check
 fmt-check: ## Fail if any line exceeds GOLINES_MAX (gofumpt/imports are enforced by lint)
-	@out="$$($(GOLINES) -m $(GOLINES_MAX) -l .)"; \
+	@out="$$([ -z "$(FMT_FILES)" ] || $(GOLINES) -m $(GOLINES_MAX) -l $(FMT_FILES))"; \
 	if [ -n "$${out}" ]; then echo "lines exceed $(GOLINES_MAX) cols (run 'make fmt'):"; echo "$${out}"; exit 1; fi
 
 .PHONY: generate
