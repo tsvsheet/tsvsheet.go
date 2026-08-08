@@ -22,10 +22,10 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f h1:Y/CXytFA4m6baUTXGLOoWe4PQhGxaX0KpnayAqC48p4=
 github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f/go.mod h1:vw97MGsxSvLiUE2X8qFplwetxpGLQrlU1Q9AUEIzCaM=
-github.com/gomatic/go-error v0.3.13 h1:Q2PAw8lt87XGDZQorId6MeAmHRJxT47XOK5eVAs/lr4=
-github.com/gomatic/go-error v0.3.13/go.mod h1:QVlrIcHreFp6u7n5UZiez8+eDllnV8eWP3vlDHSWnCo=
-github.com/gomatic/go-httpserver v0.3.16 h1:zWf7QJyfn72AKkSXq/G4aGixUIALEPbTvGRPnE/3axY=
-github.com/gomatic/go-httpserver v0.3.16/go.mod h1:dil9M47dDesNYFURZg9FPoGtdBPRabGiZraBFBJtMiU=
+github.com/gomatic/go-error v0.3.14 h1:dDdQ3nY4tStJH4GTZNN2DoIU8zIGr1u28SGDAJZ1xws=
+github.com/gomatic/go-error v0.3.14/go.mod h1:QVlrIcHreFp6u7n5UZiez8+eDllnV8eWP3vlDHSWnCo=
+github.com/gomatic/go-httpserver v0.3.21 h1:ymyrePKpTXWb8WMYY3Mho+FPC9+9xZaZ3UGXt/iSpSM=
+github.com/gomatic/go-httpserver v0.3.21/go.mod h1:VIJy7OHL/r6dRL/YJzQvJYeuRAetDKgAv7vrAtcJOLw=
 github.com/gomatic/go-log v0.3.12 h1:vCcV7MCos+Dbk7FwbKQzDfIlVDD3XttqY5bXvyM15KA=
 github.com/gomatic/go-log v0.3.12/go.mod h1:gxjlU3zqKVxwSvwUR34AiqV501/h4fanaz/QmmXPsDU=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
@@ -54,8 +54,8 @@ github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0t
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/tsvsheet/go-isnow v0.1.8 h1:iAx+EMxkRnSvMhDnhG+7X1VR2gsM5EGcuN2swObUUP4=
-github.com/tsvsheet/go-isnow v0.1.8/go.mod h1:+3c6z4f0TvrNBJOzyaKi4fSuFkVXmOjNjtFDcxOs5iU=
+github.com/tsvsheet/go-isnow v0.1.9 h1:FrZljRKagUSdtNZ7dhJVhjT6n0d/tRmcGc7hGNdojDk=
+github.com/tsvsheet/go-isnow v0.1.9/go.mod h1:+3c6z4f0TvrNBJOzyaKi4fSuFkVXmOjNjtFDcxOs5iU=
 github.com/tsvsheet/go-tsvsheet v0.27.9 h1:nclSYiPFHK+1aIvd2TL02abUsphiTRa6SSz2l34koi8=
 github.com/tsvsheet/go-tsvsheet v0.27.9/go.mod h1:/wdhi4lT6WC2/XVfLUxxZVTLpsAj6DeVU2F0g7M9/2U=
 github.com/tsvsheet/tsvsheet.api v0.2.10 h1:qofXPeEGyMRU6dWkmPYAG0ehCAAlKglVAOsn9PMEGZI=
