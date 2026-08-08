@@ -133,22 +133,24 @@ func proseOpen(st, want proseState) string {
 	if st == want {
 		return ""
 	}
+	opener := ".PP\n"
 	switch want {
 	case proseExample:
-		return ".EX\n"
-	default:
-		return ".PP\n"
+		opener = ".EX\n"
+	case proseBreak, proseText:
 	}
+	return opener
 }
 
 // proseClose ends an open .EX block; filled paragraphs need no terminator.
 func proseClose(st proseState) string {
+	closer := ""
 	switch st {
 	case proseExample:
-		return ".EE\n"
-	default:
-		return ""
+		closer = ".EE\n"
+	case proseBreak, proseText:
 	}
+	return closer
 }
 
 // isIndented reports whether line belongs to a literal example block.

@@ -91,7 +91,7 @@ func (srv Server) fillFromNeighbor(op structureOp, at tsvsheet.Address) {
 	switch op {
 	case opFillRight:
 		from = tsvsheet.Address{Row: at.Row, Col: at.Col - 1}
-	default:
+	case opInsertRow, opDeleteRow, opInsertCol, opDeleteCol, opDuplicateRow, opDuplicateCol, opFillDown:
 	}
 	if from.Row < 0 || from.Col < 0 {
 		return

@@ -180,6 +180,17 @@ func (m Model) refreshedNav() Model {
 }
 
 // editBuffer applies a printable key or backspace to an edit buffer.
+//
+// The exhaustive exemption is deliberate and is the one case the linter's own
+// rationale does not cover: tea.KeyType is bubbletea's enum, not ours, with 80+
+// members that are overwhelmingly irrelevant to a text buffer. The rule exists
+// so a newly added member of an OWNED enum cannot be silently absorbed by a
+// default; a new key constant upstream is not a defect here, and enumerating
+// every function and modifier key to say "ignore it" would bury the three that
+// matter. An owned enum gets the cases written out — see proseState in
+// internal/cli/man.go and structureOp in internal/serve/structure.go.
+//
+//nolint:exhaustive // third-party enum (tea.KeyType); default is the contract, see above
 func editBuffer(buffer editText, key tea.KeyMsg) editText {
 	switch key.Type {
 	case tea.KeyBackspace:
