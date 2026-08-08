@@ -60,6 +60,10 @@ const builtinCompletionName = "__completion"
 // omitted to read stdin.
 const argSheetOptional = "[sheet]"
 
+// argSheetsOptional is the ArgsUsage for commands that accept any number of
+// sheets and fall back to stdin when given none.
+const argSheetsOptional = "[sheet...]"
+
 // flagMaxCells names the global resource-cap flag.
 const flagMaxCells = "max-cells"
 

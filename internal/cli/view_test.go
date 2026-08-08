@@ -158,7 +158,7 @@ func TestCheckReportsDirectiveFindingsByLine(t *testing.T) {
 	t.Parallel()
 
 	streams, _, errOut := streamsWith("#.hide\trows(3)\nname\t=BADFN(1)\n")
-	err := runCheck(streams, "-", tsvsheet.DefaultLimits())
+	err := runCheck(streams, checkSources{"-"}, tsvsheet.DefaultLimits())
 	require.Error(t, err)
 
 	assert.Contains(t, errOut.String(), "line 1: ", "a directive finding is addressed by its line")

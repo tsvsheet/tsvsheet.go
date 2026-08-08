@@ -32,6 +32,20 @@ func (p positional) at(i int) sourcePath {
 	return ""
 }
 
+// sheets returns one source per positional argument, or a lone stdin source
+// when none were given. Commands that accept many sheets read every argument
+// through this, so an extra path is never silently dropped.
+func (p positional) sheets() []sourcePath {
+	if len(p) == 0 {
+		return []sourcePath{""}
+	}
+	sources := make([]sourcePath, len(p))
+	for i, arg := range p {
+		sources[i] = sourcePath(arg)
+	}
+	return sources
+}
+
 // text returns the i-th positional argument verbatim, or "" when absent.
 func (p positional) text(i int) string {
 	if i < len(p) {

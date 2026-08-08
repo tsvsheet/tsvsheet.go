@@ -32,6 +32,16 @@ const stdinMarker = "-"
 // isStdin reports whether the path selects standard input.
 func (p sourcePath) isStdin() bool { return p == "" || p == stdinMarker }
 
+// display names the source for a human: the path as written, and the stdin
+// marker for stdin however it was spelled, so an omitted argument and an
+// explicit "-" read the same in output.
+func (p sourcePath) display() string {
+	if p.isStdin() {
+		return stdinMarker
+	}
+	return string(p)
+}
+
 // closeFunc releases an opened source; it is a no-op for stdin.
 type closeFunc func() error
 
@@ -117,10 +127,21 @@ func readBounded(r io.Reader, limits tsvsheet.Limits) ([]byte, error) {
 // vetFile census-vets an open file in place: ReadAt is positional, so the
 // scan leaves the file's read offset untouched for the buffering that
 // follows an in-budget verdict.
+//
+// Only a REGULAR file can be vetted this way, and being file-SHAPED is not the
+// same thing: os.Stdin is an *os.File and so satisfies statReaderAt whatever it
+// is attached to, but on a pipe its ReadAt fails with ESPIPE and its Stat size
+// is not the document's. Testing the shape instead of the mode is what broke
+// `cat sheet.tsvt | tsv check` (and render, parse, explain) while the seekable
+// `tsv check < sheet.tsvt` kept working. A non-regular source is left to the
+// buffered vet in readBounded, which is the only order a stream allows.
 func vetFile(f statReaderAt, limits tsvsheet.Limits) error {
 	info, err := f.Stat()
 	if err != nil {
 		return constants.ErrOpenFile.With(err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil
 	}
 	return vetCensus(tsvsheet.ByteSource{ReadAt: f, Size: info.Size()}, limits)
 }

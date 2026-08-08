@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -88,12 +89,16 @@ func (e explodingFile) Stat() (os.FileInfo, error) {
 	return fakeInfo{size: e.data.Size()}, nil
 }
 
-// fakeInfo carries only the size the vet consults.
-type fakeInfo struct{ size int64 }
+// fakeInfo carries only the size and mode the vet consults. A zero mode is a
+// regular file, which is what the file-shaped doubles want.
+type fakeInfo struct {
+	size int64
+	mode os.FileMode
+}
 
 func (f fakeInfo) Name() string       { return "exploding.tsvt" }
 func (f fakeInfo) Size() int64        { return f.size }
-func (f fakeInfo) Mode() os.FileMode  { return 0 }
+func (f fakeInfo) Mode() os.FileMode  { return f.mode }
 func (f fakeInfo) ModTime() time.Time { return time.Time{} }
 func (f fakeInfo) IsDir() bool        { return false }
 func (f fakeInfo) Sys() any           { return nil }
@@ -111,6 +116,48 @@ func TestReadBounded_VetsFilesBeforeBuffering(t *testing.T) {
 		"the refusal must come from the census, not from buffering")
 	assert.NotErrorIs(t, err, tsvsheet.ErrReadInput,
 		"the exploding sequential Read was never reached")
+}
+
+// pipeFile is what os.Stdin actually is on `cat sheet.tsvt | tsv check`: an
+// *os.File, and so file-SHAPED, attached to a pipe. Its ReadAt fails the way a
+// pipe's does (ESPIPE), so any code that positionally vets it is caught here
+// rather than by a user. Its sequential Read is the only one that works —
+// which is the whole point of a stream.
+type pipeFile struct{ data *bytes.Reader }
+
+func (p pipeFile) Read(b []byte) (int, error) { return p.data.Read(b) }
+
+func (p pipeFile) ReadAt([]byte, int64) (int, error) {
+	return 0, syscall.ESPIPE
+}
+
+func (p pipeFile) Stat() (os.FileInfo, error) {
+	return fakeInfo{size: 0, mode: os.ModeNamedPipe}, nil
+}
+
+// TestReadBounded_StreamsAPipeInsteadOfSeekingIt pins the regression that broke
+// every piped command: a file-shaped source that is not a REGULAR file must be
+// read sequentially, never positionally. Vetting it through ReadAt is what
+// turned `cat sheet.tsvt | tsv check` into "illegal seek" while the seekable
+// `tsv check < sheet.tsvt` kept working.
+func TestReadBounded_StreamsAPipeInsteadOfSeekingIt(t *testing.T) {
+	t.Parallel()
+
+	src, err := readBounded(pipeFile{data: bytes.NewReader([]byte("a\tb\n"))}, tsvsheet.DefaultLimits())
+	require.NoError(t, err, "a pipe must be streamed, not seeked")
+	assert.Equal(t, "a\tb\n", string(src))
+}
+
+// TestReadBounded_VetsAPipeAfterBuffering states the budget still binds on a
+// stream: the census cannot run before buffering when the source cannot seek,
+// so it runs after — but it does run, and the refusal is the ordinary
+// over-budget one rather than a seek failure.
+func TestReadBounded_VetsAPipeAfterBuffering(t *testing.T) {
+	t.Parallel()
+
+	_, err := readBounded(pipeFile{data: bytes.NewReader([]byte("a\tb\nc\td\n"))}, tsvsheet.Limits{ResidentCells: 1})
+	require.ErrorIs(t, err, tsvsheet.ErrDocTooLarge)
+	assert.NotErrorIs(t, err, syscall.ESPIPE, "the budget refused it, not the seek")
 }
 
 // statFailingFile is file-shaped but cannot be statted.
