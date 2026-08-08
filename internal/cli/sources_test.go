@@ -2,10 +2,12 @@ package cli
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"strings"
 	"syscall"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -118,6 +120,19 @@ func TestReadBounded_VetsFilesBeforeBuffering(t *testing.T) {
 		"the exploding sequential Read was never reached")
 }
 
+// TestReadBounded_VettedFileReadFailureIsAReadError pins the other half of the
+// file path: clearing the census is not the same as being readable, so a file
+// that vets clean and then fails while being read surfaces as ErrReadInput with
+// the cause kept, rather than as an empty document.
+func TestReadBounded_VettedFileReadFailureIsAReadError(t *testing.T) {
+	t.Parallel()
+
+	inBudget := explodingFile{data: bytes.NewReader([]byte("a\tb\n"))}
+	_, err := readBounded(inBudget, tsvsheet.DefaultLimits())
+	require.ErrorIs(t, err, tsvsheet.ErrReadInput)
+	assert.ErrorIs(t, err, assert.AnError)
+}
+
 // pipeFile is what os.Stdin actually is on `cat sheet.tsvt | tsv check`: an
 // *os.File, and so file-SHAPED, attached to a pipe. Its ReadAt fails the way a
 // pipe's does (ESPIPE), so any code that positionally vets it is caught here
@@ -158,6 +173,73 @@ func TestReadBounded_VetsAPipeAfterBuffering(t *testing.T) {
 	_, err := readBounded(pipeFile{data: bytes.NewReader([]byte("a\tb\nc\td\n"))}, tsvsheet.Limits{ResidentCells: 1})
 	require.ErrorIs(t, err, tsvsheet.ErrDocTooLarge)
 	assert.NotErrorIs(t, err, syscall.ESPIPE, "the budget refused it, not the seek")
+}
+
+// floodReader hands out dense TSV up to a cap, recording how much it delivered
+// so a test can state what a refusal actually COST. The counter is a pointer
+// field behind a value receiver — the reader is copied by io.CopyN, and a
+// plain field would count only the copy's deliveries.
+type floodReader struct {
+	delivered *int64
+	cap       int64
+}
+
+func (f floodReader) Read(p []byte) (int, error) {
+	const row = "a\tb\tc\n"
+	room := f.cap - *f.delivered
+	if room <= 0 {
+		return 0, io.EOF
+	}
+	n := min(int64(len(p)), room)
+	for i := range n {
+		p[i] = row[(*f.delivered+i)%int64(len(row))]
+	}
+	*f.delivered += n
+	return int(n), nil
+}
+
+// TestReadBounded_RefusesAnOverBudgetStreamOnItsPrefix is the stream twin of
+// TestReadBounded_VetsFilesBeforeBuffering, and states the property that makes
+// a pipe safe: an over-budget stream is refused on the prefix that proved it,
+// not after the whole thing has been swallowed. A reader that buffered first
+// would deliver the full cap and fail the cost assertion — which is exactly
+// what `cat huge.tsvt | tsv render` used to do.
+func TestReadBounded_RefusesAnOverBudgetStreamOnItsPrefix(t *testing.T) {
+	t.Parallel()
+
+	var delivered int64
+	flood := floodReader{delivered: &delivered, cap: 8 << 20}
+
+	_, err := readBounded(flood, tsvsheet.Limits{ResidentCells: 100})
+	require.ErrorIs(t, err, tsvsheet.ErrDocTooLarge)
+	assert.LessOrEqual(t, delivered, int64(2*censusCheckpoint),
+		"the refusal must cost the prefix that proved it, not the whole stream")
+	assert.Less(t, delivered, flood.cap, "the stream was not drained")
+}
+
+// TestReadBounded_StreamReadFailureIsAReadError pins readStream's failure leg:
+// a stream that breaks mid-read surfaces as ErrReadInput with the cause kept,
+// rather than being mistaken for a clean end.
+func TestReadBounded_StreamReadFailureIsAReadError(t *testing.T) {
+	t.Parallel()
+
+	_, err := readBounded(iotest.ErrReader(assert.AnError), tsvsheet.DefaultLimits())
+	require.ErrorIs(t, err, tsvsheet.ErrReadInput)
+	assert.ErrorIs(t, err, assert.AnError)
+}
+
+// TestReadBounded_StreamSpanningManyCheckpoints reads an in-budget stream far
+// larger than the first checkpoint, so the doubling loop runs several times and
+// the document still arrives whole — the checkpoints must bound the read, not
+// truncate it.
+func TestReadBounded_StreamSpanningManyCheckpoints(t *testing.T) {
+	t.Parallel()
+
+	var delivered int64
+	want := int64(5 * censusCheckpoint)
+	src, err := readBounded(floodReader{delivered: &delivered, cap: want}, tsvsheet.DefaultLimits())
+	require.NoError(t, err)
+	assert.Len(t, src, int(want), "every byte of an in-budget stream is returned")
 }
 
 // statFailingFile is file-shaped but cannot be statted.

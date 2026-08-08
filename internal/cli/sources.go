@@ -7,6 +7,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 
@@ -106,22 +107,80 @@ type statReaderAt interface {
 	Stat() (os.FileInfo, error)
 }
 
+// censusCheckpoint is the first prefix size a stream is censused at, after
+// which the checkpoint doubles. Doubling is what keeps the repeated scans
+// amortised to O(n) over the whole read rather than O(n²), while still catching
+// an over-budget stream within a factor of two of the bytes that proved it.
+const censusCheckpoint = 1 << 20
+
 // readBounded reads a source fully, refusing an over-budget document as early
-// as its shape allows: a file-shaped source is census-vetted through ReadAt
-// before any buffering; anything else buffers first and is vetted before the
-// caller parses. The bytes returned are exactly the bytes vetted, so the
-// plain parse that follows cannot exceed the budget.
+// as its shape allows: a regular file is census-vetted through ReadAt before
+// any buffering, and a stream is censused as it is read. The bytes returned
+// are exactly the bytes vetted, so the plain parse that follows cannot exceed
+// the budget.
 func readBounded(r io.Reader, limits tsvsheet.Limits) ([]byte, error) {
-	if f, ok := r.(statReaderAt); ok {
-		if err := vetFile(f, limits); err != nil {
-			return nil, err
-		}
+	f, ok := r.(statReaderAt)
+	if !ok {
+		return readStream(r, limits)
 	}
+	vetted, err := vetFile(f, limits)
+	if err != nil {
+		return nil, err
+	}
+	if !vetted {
+		return readStream(r, limits)
+	}
+	return readVettedFile(r, limits)
+}
+
+// readVettedFile buffers a file the census already cleared, then re-vets the
+// bytes actually read: the pre-vet measured the file on disk, and this is what
+// makes the returned bytes — not the file — the thing that was vetted.
+func readVettedFile(r io.Reader, limits tsvsheet.Limits) ([]byte, error) {
 	src, err := readAll(r)
 	if err != nil {
 		return nil, err
 	}
-	return src, vetCensus(tsvsheet.ByteSource{ReadAt: bytes.NewReader(src), Size: int64(len(src))}, limits)
+	return src, vetBytes(src, limits)
+}
+
+// readStream reads a source whose size is unknown until it has been read — a
+// pipe, a terminal, an in-memory reader — refusing as soon as the prefix it
+// already holds is over budget. A stream has no size to census up front, so the census
+// runs on the bytes in hand at growing checkpoints; a prefix's cell count only
+// ever grows as more bytes arrive, so a prefix over budget proves the document
+// is, and the refusal costs the prefix that proved it rather than the whole
+// stream. Without this a `cat huge.tsvt | tsv render` buffered the entire
+// document before anything looked at the budget —
+// TestReadBounded_RefusesAnOverBudgetStreamOnItsPrefix states the cost bound,
+// and TestReadBounded_StreamSpanningManyCheckpoints states that an in-budget
+// stream still arrives whole.
+func readStream(r io.Reader, limits tsvsheet.Limits) ([]byte, error) {
+	var buf bytes.Buffer
+	for checkpoint := int64(censusCheckpoint); ; checkpoint *= 2 {
+		_, err := io.CopyN(&buf, r, checkpoint-int64(buf.Len()))
+		if vetErr := vetBytes(buf.Bytes(), limits); vetErr != nil {
+			return nil, vetErr
+		}
+		if err != nil {
+			return buf.Bytes(), streamEnd(err)
+		}
+	}
+}
+
+// streamEnd reads CopyN's terminator: EOF means the stream ran out, which is a
+// whole document rather than a failure, and any other error is a read failure —
+// TestReadBounded_StreamReadFailureIsAReadError states the failing leg.
+func streamEnd(err error) error {
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return tsvsheet.ErrReadInput.With(err)
+}
+
+// vetBytes census-vets a buffer already in memory.
+func vetBytes(src []byte, limits tsvsheet.Limits) error {
+	return vetCensus(tsvsheet.ByteSource{ReadAt: bytes.NewReader(src), Size: int64(len(src))}, limits)
 }
 
 // vetFile census-vets an open file in place: ReadAt is positional, so the
@@ -135,15 +194,17 @@ func readBounded(r io.Reader, limits tsvsheet.Limits) ([]byte, error) {
 // `cat sheet.tsvt | tsv check` (and render, parse, explain) while the seekable
 // `tsv check < sheet.tsvt` kept working. A non-regular source is left to the
 // buffered vet in readBounded, which is the only order a stream allows.
-func vetFile(f statReaderAt, limits tsvsheet.Limits) error {
+// It reports whether it vetted, so the caller knows whether the source still
+// owes a census as it is read.
+func vetFile(f statReaderAt, limits tsvsheet.Limits) (bool, error) {
 	info, err := f.Stat()
 	if err != nil {
-		return constants.ErrOpenFile.With(err)
+		return false, constants.ErrOpenFile.With(err)
 	}
 	if !info.Mode().IsRegular() {
-		return nil
+		return false, nil
 	}
-	return vetCensus(tsvsheet.ByteSource{ReadAt: f, Size: info.Size()}, limits)
+	return true, vetCensus(tsvsheet.ByteSource{ReadAt: f, Size: info.Size()}, limits)
 }
 
 // vetCensus refuses a source whose cell count exceeds the resident ceiling
