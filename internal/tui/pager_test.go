@@ -2,6 +2,7 @@ package tui_test
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -260,4 +261,25 @@ func TestPagerConsultsTheGuardBeforeAnyRead(t *testing.T) {
 	p := sized(t, tui.NewPager(windowed, tsvsheet.ComputeOptions{At: time.Now()}, refuse), 4)
 	assert.True(t, strings.HasPrefix(p.View(), "error: "))
 	assert.Equal(t, atOpen, src.reads, "a refused window must not touch the source")
+}
+
+// TestPagerStatusLineMatchesTheWebGolden is spec 021 area 5's parity pin: the
+// terminal pager and the browser pager (tsvsheet.web tests/pager.test.ts,
+// GOLDEN_STATUS) state the SAME facts from the same census — this literal,
+// with only the terminal's own quit hint appended. Change either side and the
+// twin fails, which is the point: the two frontends cannot drift apart
+// silently (R18).
+func TestPagerStatusLineMatchesTheWebGolden(t *testing.T) {
+	t.Parallel()
+
+	rows := make([]string, 60000)
+	for i := range rows {
+		rows[i] = fmt.Sprintf("r%d\t=%d*1", i, i)
+	}
+	src := strings.Join(rows, "\n")
+	p := sized(t, pagerOver(t, src), 42) // 40 grid rows visible, the web pager's page
+
+	const webGolden = "view-only — 60000 rows × 2 cols, 120000 cells, 60000 formulas " +
+		"(over the resident budget) · rows 1–40"
+	assert.Contains(t, p.View(), webGolden+" · q quits")
 }
