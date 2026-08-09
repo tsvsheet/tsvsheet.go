@@ -147,3 +147,22 @@ func TestSourcePathDisplay(t *testing.T) {
 	assert.Equal(t, stdinMarker, sourcePath(stdinMarker).display())
 	assert.Equal(t, "sheet.tsvt", sourcePath("sheet.tsvt").display())
 }
+
+// TestRunCheckNamedValuesVerdictsSurface pins the 023 seam: the engine's
+// naming verdicts arrive through check with their cells, and the canonical
+// named sheet is clean — so a consumer one engine behind cannot silently lose
+// the feature's diagnostics.
+func TestRunCheckNamedValuesVerdictsSurface(t *testing.T) {
+	t.Parallel()
+
+	streams, _, errBuf := streamsWith("Rate\t=0.08 |@ named(Rate)\nTax\t=@Rate * 100\n")
+	require.NoError(t, runCheck(streams, checkSources{"-"}, tsvsheet.DefaultLimits()))
+	assert.Empty(t, errBuf.String())
+
+	streams, _, errBuf = streamsWith("=1 |@ named(X)\t=2 |@ named(x)\t=@Missing\n")
+	err := runCheck(streams, checkSources{"-"}, tsvsheet.DefaultLimits())
+	require.ErrorIs(t, err, constants.ErrDiagnostics)
+	assert.Contains(t, errBuf.String(), "B1: name x is already bound at A1")
+	assert.Contains(t, errBuf.String(), "C1: unknown name: @Missing")
+	assert.Contains(t, errBuf.String(), "A1: name X is bound but never used")
+}

@@ -182,3 +182,16 @@ func TestExplain_AddsNoNoteToACellThatReadsAlike(t *testing.T) {
 	assert.Contains(t, out, "A1 = 9")
 	assert.NotContains(t, out, "note:")
 }
+
+// TestRunExplain_NamedInputs pins the 023 explain contract at the CLI: the
+// trace shows a `@name` input with its value beside the reference inputs, so
+// "why is this cell wrong" is answerable from the terminal for named sheets.
+func TestRunExplain_NamedInputs(t *testing.T) {
+	t.Parallel()
+
+	streams, out, _ := streamsWith("Rate\t=0.08 |@ named(Rate)\nTax\t=@Rate * 100\n")
+	err := runExplain(streams, explainConfig{source: "-", cell: "B2"})
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "B2 = 8")
+	assert.Contains(t, out.String(), "@Rate = 0.08")
+}
