@@ -720,12 +720,20 @@ docker-buildx: build-all ## Build + push a multi-arch image manifest (needs buil
 
 # FMT_FILES is the Go source the formatter sees: the whole tree MINUS the
 # directories and files the Go toolchain itself ignores — those whose path has
-# a segment beginning with `_` or `.` (go build/vet/list/mod-tidy all skip
-# them). Formatting must match the compiler: a `_legacy/` port-reference tree,
-# kept verbatim and never built (per its own README), otherwise fails fmt-check
-# over code that is not part of the module. A repo with no such directory sees
-# exactly the whole tree, so its behaviour is unchanged.
-FMT_FILES = $(shell find . -name '*.go' -not -path '*/_*' -not -path '*/.*')
+# a segment beginning with `_` or `.`, and those under a `testdata/` directory
+# (go build/vet/list/mod-tidy skip all three). Formatting must match the
+# compiler: a `_legacy/` port-reference tree, kept verbatim and never built (per
+# its own README), otherwise fails fmt-check over code that is not part of the
+# module. A repo with no such directory sees exactly the whole tree, so its
+# behaviour is unchanged.
+#
+# `testdata/` is not merely unbuilt — for an analyzer repo it is the SPECIMEN,
+# and formatting it destroys what it tests. yze-go-cliv3's fixture writes an
+# import path as a RAW string literal so the analyzer is proven to flag that
+# form too; golines rewrote it to a quoted string, which silently turns the
+# edge-case fixture into a duplicate of the ordinary one. The gate was failing
+# on a file whose non-conformance is its entire purpose.
+FMT_FILES = $(shell find . -name '*.go' -not -path '*/_*' -not -path '*/.*' -not -path '*/testdata/*')
 
 .PHONY: fmt
 fmt: ## Format code (golines then gofumpt)
