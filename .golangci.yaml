@@ -1,4 +1,4 @@
-# Managed by nicerobot/tools.repository (distribute-build)
+# Managed by distribute-build; edits are replaced
 # Default golangci-lint (v2) configuration shipped with the go-tooling image.
 #
 # Consuming repositories may override this entirely by committing their own

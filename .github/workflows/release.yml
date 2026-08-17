@@ -1,4 +1,4 @@
-# Managed by nicerobot/tools.repository (distribute-build)
+# Managed by distribute-build; edits are replaced
 name: release
 on:
   # A literal trigger, not the schedule marker the gate workflows carry:
