@@ -8,10 +8,10 @@ require (
 	github.com/gomatic/go-error v0.3.15
 	github.com/gomatic/go-httpserver v0.3.23
 	github.com/gomatic/go-log v0.3.13
-	github.com/stretchr/testify v1.11.1
-	github.com/tsvsheet/go-isnow v0.1.10
-	github.com/tsvsheet/go-tsvsheet v0.27.12
-	github.com/tsvsheet/tsvsheet.api v0.2.11
+	github.com/stretchr/testify v1.12.0
+	github.com/tsvsheet/go-isnow v0.1.12
+	github.com/tsvsheet/go-tsvsheet v0.28.1
+	github.com/tsvsheet/tsvsheet.api v0.3.2
 	github.com/urfave/cli/v3 v3.10.1
 )
 
@@ -24,7 +24,6 @@ require (
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
@@ -33,7 +32,6 @@ require (
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/exp v0.0.0-20260727155853-b88d891fe743 // indirect
